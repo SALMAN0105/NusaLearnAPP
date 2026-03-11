@@ -1,10 +1,18 @@
 import 'dart:io';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:nusalearn/core/database/database_helper.dart';
 import 'package:nusalearn/core/services/adaptive_service.dart';
 import 'package:nusalearn/ui/screens/materi_detail_screen.dart';
+
+// --- KONSTANTA NEO-BRUTALISM ---
+const Color kLime = Color(0xFFD2F945);
+const Color kPurple = Color.fromARGB(255, 156, 132, 242);
+const Color kBlack = Color(0xFF000000);
+const Color kWhite = Color(0xFFFFFFFF);
+const double kBorderWidth = 1.5;
 
 class MateriTab extends StatefulWidget {
   const MateriTab({super.key});
@@ -13,7 +21,8 @@ class MateriTab extends StatefulWidget {
   State<MateriTab> createState() => _MateriTabState();
 }
 
-class _MateriTabState extends State<MateriTab> {
+class _MateriTabState extends State<MateriTab> with TickerProviderStateMixin {
+  // === LOGIKA INTI (TIDAK DISENTUH) ===
   String _school = "Memuat...";
   String _username = "Siswa";
   String _selectedCategory = "Semua";
@@ -23,11 +32,25 @@ class _MateriTabState extends State<MateriTab> {
   bool _isLoading = true;
   int _studentLevel = 1;
 
+  late AnimationController _spinController;
+
   @override
   void initState() {
     super.initState();
+    // Inisialisasi controller untuk animasi loader
+    _spinController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat();
+
     _loadHeaderData();
     _loadMaterials();
+  }
+
+  @override
+  void dispose() {
+    _spinController.dispose();
+    super.dispose();
   }
 
   void _loadHeaderData() async {
@@ -84,524 +107,570 @@ class _MateriTabState extends State<MateriTab> {
     await Future.delayed(const Duration(milliseconds: 500));
     _loadMaterials();
   }
+  // === AKHIR LOGIKA INTI ===
 
-  // ✅ FUNGSI POPUP INFORMASI AI (UNTUK DEMO KE DOSEN)
+  // === UI UPDATE: DIALOG INFO AI ADAPTIF (NEO-BRUTALISM) ===
   void _showAdaptiveInfo(BuildContext context) {
     showDialog(
       context: context,
       builder: (context) {
         return Dialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
-          ),
-          elevation: 10,
           backgroundColor: Colors.transparent,
-          child: Stack(
-            children: [
-              // Background Putih
-              Container(
-                padding: const EdgeInsets.fromLTRB(24, 60, 24, 24),
-                margin: const EdgeInsets.only(top: 40),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(24),
+          elevation: 0,
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: kWhite,
+              border: Border.all(color: kBlack, width: kBorderWidth),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: const [BoxShadow(color: kBlack, offset: Offset(4, 4))],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: kPurple,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: kBlack, width: kBorderWidth),
+                    boxShadow: const [
+                      BoxShadow(color: kBlack, offset: Offset(2, 2)),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.auto_awesome,
+                    color: kBlack,
+                    size: 40,
+                  ),
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      "Adaptive Learning System",
-                      style: GoogleFonts.poppins(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.teal.shade800,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Poin-poin penjelasan
-                    _buildInfoItem(
-                      icon: Icons.analytics_outlined,
-                      title: "Analisis Real-time",
-                      desc:
-                          "Sistem menganalisis jawaban siswa untuk menentukan tingkat pemahaman secara akurat.",
-                    ),
-                    const SizedBox(height: 12),
-                    _buildInfoItem(
-                      icon: Icons.tune_rounded,
-                      title: "Penyesuaian Dinamis",
-                      desc:
-                          "Tingkat kesulitan materi (Level 1-3) disesuaikan otomatis. Jika siswa mahir, level naik.",
-                    ),
-                    const SizedBox(height: 12),
-                    _buildInfoItem(
-                      icon: Icons.person_pin_circle_outlined,
-                      title: "Personalisasi",
-                      desc:
-                          "Setiap siswa mendapatkan rekomendasi materi yang unik sesuai kemampuan masing-masing.",
-                    ),
-
-                    const SizedBox(height: 24),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: () => Navigator.pop(context),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.teal,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                        child: Text(
-                          "Mengerti",
-                          style: GoogleFonts.poppins(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+                const SizedBox(height: 16),
+                Text(
+                  "Adaptive Learning",
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                    color: kBlack,
+                  ),
                 ),
-              ),
-
-              // Icon Floating di Atas
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                child: Center(
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.teal.shade400,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.teal.withOpacity(0.4),
-                          blurRadius: 20,
-                          offset: const Offset(0, 10),
+                const SizedBox(height: 12),
+                Text(
+                  "Materi disesuaikan otomatis dengan kemampuanmu (Level $_studentLevel). Sistem menganalisis perkembanganmu secara real-time!",
+                  style: GoogleFonts.plusJakartaSans(
+                    color: kBlack.withOpacity(0.8),
+                    fontSize: 12,
+                    height: 1.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      decoration: BoxDecoration(
+                        color: kLime,
+                        border: Border.all(color: kBlack, width: kBorderWidth),
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: const [
+                          BoxShadow(color: kBlack, offset: Offset(2, 2)),
+                        ],
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        "Mengerti",
+                        style: GoogleFonts.plusJakartaSans(
+                          color: kBlack,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 14,
                         ),
-                      ],
-                      border: Border.all(color: Colors.white, width: 4),
-                    ),
-                    child: const Icon(
-                      Icons.auto_awesome,
-                      color: Colors.white,
-                      size: 40,
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         );
       },
     );
   }
 
-  // Helper Widget untuk Item Info Popup
-  Widget _buildInfoItem({
-    required IconData icon,
-    required String title,
-    required String desc,
-  }) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: Colors.teal.shade50,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(icon, color: Colors.teal, size: 20),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: GoogleFonts.poppins(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 14,
-                  color: Colors.black87,
+  // === UI UPDATE: LOADER (NEO-BRUTALISM) ===
+  Widget _buildGlassmorphismLoader() {
+    return Positioned.fill(
+      child: ClipRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 5.0, sigmaY: 5.0),
+          child: Container(
+            color: Colors.transparent,
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+                decoration: BoxDecoration(
+                  color: kLime,
+                  border: Border.all(color: kBlack, width: kBorderWidth),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: const [
+                    BoxShadow(color: kBlack, offset: Offset(4, 4)),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    RotationTransition(
+                      turns: _spinController,
+                      child: const Icon(Icons.autorenew_rounded, color: kBlack),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      "Memuat Materi",
+                      style: GoogleFonts.plusJakartaSans(
+                        fontWeight: FontWeight.w800,
+                        color: kBlack,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 2),
-              Text(
-                desc,
-                style: GoogleFonts.poppins(
-                  fontSize: 12,
-                  color: Colors.grey.shade600,
-                  height: 1.4,
-                ),
-              ),
-            ],
+            ),
           ),
         ),
-      ],
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFAFAFA),
-      body: SafeArea(
-        child: Column(
-          children: [
-            // 1. HEADER (Logo NusaLearn & Badge AI)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 20, 24, 10),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  // Logo NusaLearn & Sapaan
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+      backgroundColor: const Color(0xFF0F0F17), // Base dark frame if needed
+      body: Stack(
+        children: [
+          // Background Gradient
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Color.fromARGB(255, 238, 233, 249),
+                  Color.fromARGB(255, 181, 161, 239),
+                ],
+              ),
+            ),
+          ),
+
+          // Background Grid Pattern
+          CustomPaint(painter: GridPainter(), child: Container()),
+
+          SafeArea(
+            child: Column(
+              children: [
+                // 1. APP BAR (Neo-Brutalism)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 20, 24, 10),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        "Halo, $_username 👋",
-                        style: GoogleFonts.poppins(
-                          fontSize: 12,
-                          color: Colors.grey.shade600,
-                        ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                "Nusa",
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w900,
+                                  color: kBlack,
+                                  letterSpacing: -0.5,
+                                  height: 1.2,
+                                ),
+                              ),
+                              Transform.rotate(
+                                angle: -0.04,
+                                child: Container(
+                                  margin: const EdgeInsets.only(left: 2),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: kPurple,
+                                    border: Border.all(
+                                      color: kBlack,
+                                      width: kBorderWidth,
+                                    ),
+                                    borderRadius: BorderRadius.circular(8),
+                                    boxShadow: const [
+                                      BoxShadow(
+                                        color: kBlack,
+                                        offset: Offset(2, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Text(
+                                    "Learn",
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.w900,
+                                      color: kBlack,
+                                      letterSpacing: -0.5,
+                                      height: 1.2,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            "Halo, $_username 👋",
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: kBlack,
+                            ),
+                          ),
+                        ],
                       ),
-                      RichText(
-                        text: TextSpan(
-                          children: [
-                            TextSpan(
-                              text: "Nusa",
-                              style: GoogleFonts.poppins(
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black87,
+                      GestureDetector(
+                        onTap: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                "AI sedang aktif menyesuaikan materimu!",
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontWeight: FontWeight.w700,
+                                  color: kBlack,
+                                ),
+                              ),
+                              backgroundColor: kLime,
+                              duration: const Duration(milliseconds: 1000),
+                              behavior: SnackBarBehavior.floating,
+                              shape: RoundedRectangleBorder(
+                                side: const BorderSide(color: kBlack, width: 2),
+                                borderRadius: BorderRadius.circular(10),
                               ),
                             ),
-                            TextSpan(
-                              text: "Learn",
-                              style: GoogleFonts.poppins(
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.teal,
-                              ),
+                          );
+                        },
+                        onLongPress: () => _showAdaptiveInfo(context),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: kLime,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: kBlack,
+                              width: kBorderWidth,
                             ),
-                          ],
+                            boxShadow: const [
+                              BoxShadow(color: kBlack, offset: Offset(2, 2)),
+                            ],
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.auto_awesome,
+                                color: kBlack,
+                                size: 16,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                "AI AKTIF",
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w900,
+                                  color: kBlack,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ],
                   ),
+                ),
 
-                  // ✅ BADGE ADAPTIF AI (Tekan Lama untuk Info Dosen)
-                  GestureDetector(
-                    onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            "AI sedang aktif menyesuaikan materimu!",
-                            style: GoogleFonts.poppins(),
-                          ),
-                          backgroundColor: Colors.teal,
-                          duration: const Duration(milliseconds: 1000),
-                          behavior: SnackBarBehavior.floating,
-                        ),
-                      );
-                    },
-                    onLongPress: () {
-                      _showAdaptiveInfo(context);
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.teal.shade50,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: Colors.teal.shade100),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.teal.withOpacity(0.1),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.auto_awesome,
-                            color: Colors.teal.shade600,
-                            size: 16,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            "Adaptif AI",
-                            style: GoogleFonts.poppins(
-                              color: Colors.teal.shade800,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            Expanded(
-              child: RefreshIndicator(
-                onRefresh: _refreshData,
-                color: Colors.teal,
-                backgroundColor: Colors.white,
-                child: CustomScrollView(
-                  slivers: [
-                    // 2. KARTU LEVEL & SEKOLAH
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(24, 10, 24, 20),
-                        child: Container(
-                          padding: const EdgeInsets.all(20),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                Colors.teal.shade700,
-                                Colors.teal.shade400,
-                              ],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            borderRadius: BorderRadius.circular(20),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.teal.withOpacity(0.3),
-                                blurRadius: 10,
-                                offset: const Offset(0, 5),
+                Expanded(
+                  child: RefreshIndicator(
+                    onRefresh: _refreshData,
+                    color: kBlack,
+                    backgroundColor: kLime,
+                    child: CustomScrollView(
+                      physics: const BouncingScrollPhysics(),
+                      slivers: [
+                        // 2. HERO CARD (Level & Sekolah)
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(24, 10, 24, 20),
+                            child: Container(
+                              padding: const EdgeInsets.all(24),
+                              decoration: BoxDecoration(
+                                color: kPurple,
+                                border: Border.all(
+                                  color: kBlack,
+                                  width: kBorderWidth,
+                                ),
+                                borderRadius: BorderRadius.circular(20),
+                                boxShadow: const [
+                                  BoxShadow(
+                                    color: kBlack,
+                                    offset: Offset(4, 4),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
-                          child: Column(
-                            children: [
-                              // Baris Level
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
+                              child: Stack(
+                                clipBehavior: Clip.none,
                                 children: [
+                                  const Positioned(
+                                    top: -10,
+                                    right: -10,
+                                    child: Icon(
+                                      Icons.workspace_premium_rounded,
+                                      color: Color(0xFFFFC107),
+                                      size: 50,
+                                      shadows: [
+                                        Shadow(
+                                          color: kBlack,
+                                          offset: Offset(2, 2),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
                                   Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        "Level Kamu Saat Ini",
-                                        style: GoogleFonts.poppins(
-                                          fontSize: 10,
-                                          color: Colors.white70,
+                                        "LEVEL KAMU SAAT INI",
+                                        style: GoogleFonts.plusJakartaSans(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w900,
+                                          color: kBlack,
+                                          letterSpacing: 0.5,
                                         ),
                                       ),
+                                      const SizedBox(height: 4),
                                       Text(
                                         "Level $_studentLevel",
-                                        style: GoogleFonts.poppins(
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.white,
-                                          fontSize: 22,
+                                        style: GoogleFonts.plusJakartaSans(
+                                          fontSize: 36,
+                                          fontWeight: FontWeight.w900,
+                                          color: kBlack,
+                                          height: 1.1,
+                                          letterSpacing: -1,
                                         ),
+                                      ),
+                                      const SizedBox(height: 16),
+                                      Container(
+                                        height: 2,
+                                        color: kBlack,
+                                        width: double.infinity,
+                                      ),
+                                      const SizedBox(height: 16),
+                                      Row(
+                                        children: [
+                                          Container(
+                                            width: 40,
+                                            height: 40,
+                                            decoration: BoxDecoration(
+                                              color: kWhite,
+                                              border: Border.all(
+                                                color: kBlack,
+                                                width: kBorderWidth,
+                                              ),
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                              boxShadow: const [
+                                                BoxShadow(
+                                                  color: kBlack,
+                                                  offset: Offset(2, 2),
+                                                ),
+                                              ],
+                                            ),
+                                            child: const Icon(
+                                              Icons.school_rounded,
+                                              color: kBlack,
+                                              size: 20,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: Text(
+                                              _school,
+                                              style:
+                                                  GoogleFonts.plusJakartaSans(
+                                                    fontSize: 14,
+                                                    fontWeight: FontWeight.w800,
+                                                    color: kBlack,
+                                                  ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ],
                                   ),
-                                  const Icon(
-                                    Icons.workspace_premium_rounded,
-                                    color: Colors.amber,
-                                    size: 40,
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+
+                        // 3. SEARCH BAR
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                            child: Container(
+                              height: 56,
+                              decoration: BoxDecoration(
+                                color: kWhite,
+                                border: Border.all(
+                                  color: kBlack,
+                                  width: kBorderWidth,
+                                ),
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: const [
+                                  BoxShadow(
+                                    color: kBlack,
+                                    offset: Offset(4, 4),
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 15),
-                              Container(height: 1, color: Colors.white24),
-                              const SizedBox(height: 12),
+                              child: TextField(
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontWeight: FontWeight.w700,
+                                  color: kBlack,
+                                ),
+                                decoration: InputDecoration(
+                                  hintText: "Mau belajar apa hari ini?",
+                                  hintStyle: GoogleFonts.plusJakartaSans(
+                                    color: const Color(0xFF6B6B6B),
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                  prefixIcon: const Icon(
+                                    Icons.search_rounded,
+                                    color: kBlack,
+                                    size: 24,
+                                  ),
+                                  border: InputBorder.none,
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    vertical: 16,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
 
-                              // Baris Sekolah
-                              Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(6),
+                        // 4. KATEGORI (CHIPS)
+                        SliverToBoxAdapter(
+                          child: Container(
+                            height: 40,
+                            margin: const EdgeInsets.symmetric(vertical: 24),
+                            child: ListView.builder(
+                              scrollDirection: Axis.horizontal,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 24,
+                              ),
+                              itemCount: _categories.length,
+                              itemBuilder: (context, index) {
+                                final category = _categories[index];
+                                final isSelected =
+                                    _selectedCategory == category;
+
+                                return GestureDetector(
+                                  onTap: () {
+                                    setState(() {
+                                      _selectedCategory = category;
+                                      _isLoading = true;
+                                    });
+                                    _loadMaterials();
+                                  },
+                                  child: Container(
+                                    margin: const EdgeInsets.only(right: 12),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 20,
+                                    ),
+                                    alignment: Alignment.center,
                                     decoration: BoxDecoration(
-                                      color: Colors.white24,
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: const Icon(
-                                      Icons.school_rounded,
-                                      color: Colors.white,
-                                      size: 16,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Text(
-                                      _school,
-                                      style: GoogleFonts.poppins(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w500,
-                                        fontSize: 13,
+                                      color: isSelected ? kLime : kWhite,
+                                      border: Border.all(
+                                        color: kBlack,
+                                        width: kBorderWidth,
                                       ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
+                                      borderRadius: BorderRadius.circular(14),
+                                      boxShadow: isSelected
+                                          ? const [
+                                              BoxShadow(
+                                                color: kBlack,
+                                                offset: Offset(2, 2),
+                                              ),
+                                            ]
+                                          : [],
+                                    ),
+                                    child: Text(
+                                      category,
+                                      style: GoogleFonts.plusJakartaSans(
+                                        color: isSelected
+                                            ? kBlack
+                                            : const Color(0xFF6B6B6B),
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 12,
+                                      ),
                                     ),
                                   ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-
-                    // 3. SEARCH BAR
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 24),
-                        child: Container(
-                          height: 50,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(15),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.04),
-                                blurRadius: 10,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: TextField(
-                            decoration: InputDecoration(
-                              hintText: "Mau belajar apa hari ini?",
-                              hintStyle: GoogleFonts.poppins(
-                                color: Colors.grey.shade400,
-                                fontSize: 13,
-                              ),
-                              prefixIcon: Icon(
-                                Icons.search_rounded,
-                                color: Colors.teal.shade300,
-                              ),
-                              border: InputBorder.none,
-                              contentPadding: const EdgeInsets.symmetric(
-                                vertical: 14,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-
-                    // 4. KATEGORI (CHIPS)
-                    SliverToBoxAdapter(
-                      child: Container(
-                        height: 50,
-                        margin: const EdgeInsets.symmetric(vertical: 20),
-                        child: ListView.builder(
-                          scrollDirection: Axis.horizontal,
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
-                          itemCount: _categories.length,
-                          itemBuilder: (context, index) {
-                            final category = _categories[index];
-                            final isSelected = _selectedCategory == category;
-
-                            return GestureDetector(
-                              onTap: () {
-                                setState(() {
-                                  _selectedCategory = category;
-                                  _isLoading = true;
-                                });
-                                _loadMaterials();
+                                );
                               },
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 300),
-                                curve: Curves.easeInOut,
-                                margin: const EdgeInsets.only(right: 12),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 20,
-                                  vertical: 0,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: isSelected
-                                      ? Colors.teal
-                                      : Colors.white,
-                                  borderRadius: BorderRadius.circular(25),
-                                  border: Border.all(
-                                    color: isSelected
-                                        ? Colors.teal
-                                        : Colors.grey.shade200,
-                                  ),
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    category,
-                                    style: GoogleFonts.poppins(
-                                      color: isSelected
-                                          ? Colors.white
-                                          : Colors.grey.shade600,
-                                      fontWeight: isSelected
-                                          ? FontWeight.w600
-                                          : FontWeight.w500,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    ),
-
-                    // 5. GRID MATERI
-                    _isLoading
-                        ? const SliverFillRemaining(
-                            child: Center(
-                              child: CircularProgressIndicator(
-                                color: Colors.teal,
-                              ),
                             ),
-                          )
-                        : _materials.isEmpty
-                        ? SliverFillRemaining(
+                          ),
+                        ),
+
+                        // 5. GRID MATERI
+                        if (!_isLoading && _materials.isEmpty)
+                          SliverFillRemaining(
                             child: Center(
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Icon(
+                                  const Icon(
                                     Icons.folder_off_rounded,
                                     size: 60,
-                                    color: Colors.grey.shade300,
+                                    color: kBlack,
                                   ),
                                   const SizedBox(height: 10),
                                   Text(
                                     "Belum ada materi",
-                                    style: GoogleFonts.poppins(
-                                      color: Colors.grey,
+                                    style: GoogleFonts.plusJakartaSans(
+                                      color: kBlack,
+                                      fontWeight: FontWeight.w800,
                                     ),
                                   ),
                                 ],
                               ),
                             ),
                           )
-                        : SliverPadding(
+                        else if (!_isLoading && _materials.isNotEmpty)
+                          SliverPadding(
                             padding: const EdgeInsets.symmetric(horizontal: 24),
                             sliver: SliverGrid(
                               gridDelegate:
                                   const SliverGridDelegateWithFixedCrossAxisCount(
                                     crossAxisCount: 2,
                                     childAspectRatio:
-                                        0.72, // Rasio kartu dioptimalkan
+                                        0.75, // Disesuaikan dengan desain card
                                     crossAxisSpacing: 16,
                                     mainAxisSpacing: 16,
                                   ),
@@ -620,94 +689,16 @@ class _MateriTabState extends State<MateriTab> {
                                       ),
                                     );
                                   },
-                                  child: _MaterialCard(item: item),
+                                  child: _MaterialCard(
+                                    item: item,
+                                    index: index,
+                                  ),
                                 );
                               }, childCount: _materials.length),
                             ),
                           ),
-                    const SliverToBoxAdapter(child: SizedBox(height: 30)),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _MaterialCard extends StatelessWidget {
-  final Map<String, dynamic> item;
-  const _MaterialCard({required this.item});
-
-  @override
-  Widget build(BuildContext context) {
-    String? localPath = item['local_image_path'];
-    bool hasLocalImage = localPath != null && File(localPath).existsSync();
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 1. BAGIAN GAMBAR
-          Expanded(
-            flex: 4,
-            child: Stack(
-              children: [
-                Container(
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: Colors.orange.shade50,
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(16),
-                    ),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(16),
-                    ),
-                    child: hasLocalImage
-                        ? Image.file(File(localPath), fit: BoxFit.cover)
-                        : Center(
-                            child: Icon(
-                              Icons.menu_book_rounded,
-                              size: 30,
-                              color: Colors.orange.shade200,
-                            ),
-                          ),
-                  ),
-                ),
-                Positioned(
-                  top: 8,
-                  left: 8,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.95),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      (item['category'] ?? 'UMUM').toString().toUpperCase(),
-                      style: GoogleFonts.poppins(
-                        fontSize: 8,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.teal.shade700,
-                      ),
+                        const SliverToBoxAdapter(child: SizedBox(height: 40)),
+                      ],
                     ),
                   ),
                 ),
@@ -715,81 +706,204 @@ class _MaterialCard extends StatelessWidget {
             ),
           ),
 
-          // 2. BAGIAN TEKS
+          // Memanggil Glassmorphism Loader dari animasi state
+          if (_isLoading) _buildGlassmorphismLoader(),
+        ],
+      ),
+    );
+  }
+}
+
+class _MaterialCard extends StatelessWidget {
+  final Map<String, dynamic> item;
+  final int index;
+
+  const _MaterialCard({super.key, required this.item, required this.index});
+
+  @override
+  Widget build(BuildContext context) {
+    String? localPath = item['local_image_path'];
+    bool hasLocalImage = localPath != null && File(localPath).existsSync();
+
+    // Rotasi warna box untuk variasi visual seperti di desain HTML
+    List<Color> boxColors = [
+      const Color(0xFFFFDEB3),
+      const Color(0xFFB3E5FF),
+      const Color(0xFFFFB3D9),
+      const Color(0xFFE0F7FA),
+    ];
+    Color imageBgColor = boxColors[index % boxColors.length];
+
+    return Container(
+      decoration: BoxDecoration(
+        color: kWhite,
+        border: Border.all(color: kBlack, width: kBorderWidth),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: const [BoxShadow(color: kBlack, offset: Offset(4, 4))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // 1. BAGIAN GAMBAR (Expanded murni untuk fleksibilitas sisa ruang)
           Expanded(
-            flex: 3,
-            child: Padding(
-              padding: const EdgeInsets.all(10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+            child: Container(
+              decoration: BoxDecoration(
+                color: imageBgColor,
+                border: const Border(
+                  bottom: BorderSide(color: kBlack, width: kBorderWidth),
+                ),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(18),
+                ),
+              ),
+              child: Stack(
                 children: [
-                  Text(
-                    item['title_indo'] ?? 'Tanpa Judul',
-                    style: GoogleFonts.poppins(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12,
-                      height: 1.2,
-                      color: Colors.black87,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-
-                  const Spacer(),
-
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade100,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.signal_cellular_alt,
-                              size: 10,
-                              color: Colors.grey.shade600,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              "Lv ${item['level_difficulty']}",
-                              style: GoogleFonts.poppins(
-                                color: Colors.grey.shade600,
-                                fontSize: 9,
-                                fontWeight: FontWeight.w500,
+                  Positioned.fill(
+                    child: ClipRRect(
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(18),
+                      ),
+                      child: hasLocalImage
+                          ? Image.file(File(localPath), fit: BoxFit.cover)
+                          : Center(
+                              child: Icon(
+                                Icons.menu_book_rounded,
+                                size: 40,
+                                color: kBlack.withOpacity(0.5),
                               ),
                             ),
-                          ],
+                    ),
+                  ),
+                  Positioned(
+                    top: 10,
+                    left: 10,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: kWhite,
+                        border: Border.all(color: kBlack, width: kBorderWidth),
+                        borderRadius: BorderRadius.circular(8),
+                        boxShadow: const [
+                          BoxShadow(color: kBlack, offset: Offset(2, 2)),
+                        ],
+                      ),
+                      child: Text(
+                        (item['category'] ?? 'UMUM').toString().toUpperCase(),
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w900,
+                          color: kBlack,
                         ),
                       ),
-
-                      Container(
-                        width: 24,
-                        height: 24,
-                        decoration: BoxDecoration(
-                          color: Colors.teal.shade50,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          Icons.chevron_right,
-                          size: 16,
-                          color: Colors.teal.shade700,
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ],
               ),
+            ),
+          ),
+
+          // 2. BAGIAN TEKS (Bebas constraint flex, ukuran menyesuaikan konten)
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min, // Kunci utama mencegah overflow
+              children: [
+                Text(
+                  item['title_indo'] ?? 'Tanpa Judul',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 13,
+                    height: 1.3,
+                    color: kBlack,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(
+                  height: 12,
+                ), // Jarak pasti tanpa fluktuasi spaceBetween
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF4F0FF),
+                        border: Border.all(color: kBlack, width: 1.5),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.signal_cellular_alt,
+                            size: 12,
+                            color: kBlack,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            "Lv ${item['level_difficulty'] ?? 1}",
+                            style: GoogleFonts.plusJakartaSans(
+                              color: kBlack,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      width: 30,
+                      height: 30,
+                      decoration: BoxDecoration(
+                        color: kLime,
+                        border: Border.all(color: kBlack, width: kBorderWidth),
+                        borderRadius: BorderRadius.circular(10),
+                        boxShadow: const [
+                          BoxShadow(color: kBlack, offset: Offset(2, 2)),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.chevron_right,
+                        size: 18,
+                        color: kBlack,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
         ],
       ),
     );
   }
+}
+
+// --- BACKGROUND GRID PAINTER ---
+class GridPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.black.withOpacity(0.06)
+      ..strokeWidth = 1;
+
+    const double step = 32.0;
+
+    for (double i = 0; i < size.width; i += step) {
+      canvas.drawLine(Offset(i, 0), Offset(i, size.height), paint);
+    }
+    for (double j = 0; j < size.height; j += step) {
+      canvas.drawLine(Offset(0, j), Offset(size.width, j), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

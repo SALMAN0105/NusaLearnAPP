@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -8,6 +9,13 @@ import 'package:nusalearn/core/services/adaptive_service.dart';
 import 'package:nusalearn/logic/providers/auth_provider.dart';
 import 'package:nusalearn/ui/screens/quiz_screen.dart';
 
+// --- KONSTANTA NEO-BRUTALISM ---
+const Color kLime = Color(0xFFD2F945);
+const Color kPurple = Color.fromARGB(255, 156, 132, 242);
+const Color kBlack = Color(0xFF000000);
+const Color kWhite = Color(0xFFFFFFFF);
+const double kBorderWidth = 1.5;
+
 class KuisTab extends StatefulWidget {
   const KuisTab({super.key});
 
@@ -15,7 +23,8 @@ class KuisTab extends StatefulWidget {
   State<KuisTab> createState() => _KuisTabState();
 }
 
-class _KuisTabState extends State<KuisTab> {
+class _KuisTabState extends State<KuisTab> with TickerProviderStateMixin {
+  // === LOGIKA INTI (TIDAK DISENTUH) ===
   String _school = "Memuat...";
   String _username = "Siswa";
   List<Map<String, dynamic>> _quizList = [];
@@ -28,11 +37,24 @@ class _KuisTabState extends State<KuisTab> {
   int _selectedLevel = 0;
   final List<int> _levels = [0, 1, 2, 3];
 
+  late AnimationController _spinController;
+
   @override
   void initState() {
     super.initState();
+    _spinController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat();
+
     _loadHeaderData();
     _loadAvailableQuizzesWithProgress();
+  }
+
+  @override
+  void dispose() {
+    _spinController.dispose();
+    super.dispose();
   }
 
   void _loadHeaderData() async {
@@ -41,85 +63,6 @@ class _KuisTabState extends State<KuisTab> {
       _school = prefs.getString('user_school') ?? "Sekolah Dasar";
       _username = prefs.getString('user_name') ?? "Siswa";
     });
-  }
-
-  // ✅ FUNGSI POPUP INFO AI
-  void _showAdaptiveInfo(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return Dialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
-          ),
-          elevation: 10,
-          backgroundColor: Colors.transparent,
-          child: Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(24),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.teal.shade50,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.auto_awesome,
-                    color: Colors.teal,
-                    size: 40,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  "Kuis Adaptif",
-                  style: GoogleFonts.poppins(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  "Soal kuis ini disesuaikan dengan level pemahamanmu. Selesaikan kuis untuk menaikkan level dan membuka tantangan baru!",
-                  style: GoogleFonts.poppins(
-                    color: Colors.grey.shade600,
-                    fontSize: 13,
-                    height: 1.5,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.teal,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: Text(
-                      "Siap!",
-                      style: GoogleFonts.poppins(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
   }
 
   void _loadAvailableQuizzesWithProgress() async {
@@ -177,367 +120,597 @@ class _KuisTabState extends State<KuisTab> {
       });
     }
   }
+  // === AKHIR LOGIKA INTI ===
+
+  // === UI UPDATE: DIALOG INFO AI ADAPTIF (NEO-BRUTALISM) ===
+  void _showAdaptiveInfo(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: kWhite,
+              border: Border.all(color: kBlack, width: kBorderWidth),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: const [BoxShadow(color: kBlack, offset: Offset(4, 4))],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: kPurple,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: kBlack, width: kBorderWidth),
+                    boxShadow: const [
+                      BoxShadow(color: kBlack, offset: Offset(2, 2)),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.auto_awesome,
+                    color: kBlack,
+                    size: 40,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  "Kuis Adaptif AI",
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                    color: kBlack,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  "Soal kuis disesuaikan dengan level pemahamanmu secara otomatis. Selesaikan kuis untuk menaikkan level!",
+                  style: GoogleFonts.plusJakartaSans(
+                    color: kBlack.withOpacity(0.8),
+                    fontSize: 12,
+                    height: 1.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      decoration: BoxDecoration(
+                        color: kLime,
+                        border: Border.all(color: kBlack, width: kBorderWidth),
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: const [
+                          BoxShadow(color: kBlack, offset: Offset(2, 2)),
+                        ],
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        "Siap!",
+                        style: GoogleFonts.plusJakartaSans(
+                          color: kBlack,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // === UI UPDATE: LOADER (GLASSMORPHISM) ===
+  Widget _buildGlassmorphismLoader() {
+    return Positioned.fill(
+      child: ClipRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 5.0, sigmaY: 5.0),
+          child: Container(
+            color: Colors.transparent,
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+                decoration: BoxDecoration(
+                  color: kLime,
+                  border: Border.all(color: kBlack, width: kBorderWidth),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: const [
+                    BoxShadow(color: kBlack, offset: Offset(4, 4)),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    RotationTransition(
+                      turns: _spinController,
+                      child: const Icon(
+                        Icons.videogame_asset_rounded,
+                        color: kBlack,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      "Memuat Kuis",
+                      style: GoogleFonts.plusJakartaSans(
+                        fontWeight: FontWeight.w900,
+                        color: kBlack,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     Provider.of<AuthProvider>(context);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFAFAFA),
-      body: SafeArea(
-        child: Column(
-          children: [
-            // 1. HEADER
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 20, 24, 10),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+      backgroundColor: const Color(0xFF0F0F17),
+      body: Stack(
+        children: [
+          // Background Gradient Neo-Brutalism
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0xFFEAE0FF), Color(0xFFD8C3FF)],
+              ),
+            ),
+          ),
+          CustomPaint(painter: GridPainter(), child: Container()),
+
+          SafeArea(
+            child: Column(
+              children: [
+                // 1. APP BAR
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 20, 24, 10),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        "Halo, $_username 👋",
-                        style: GoogleFonts.poppins(
-                          fontSize: 12,
-                          color: Colors.grey.shade600,
-                        ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                "Nusa",
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w900,
+                                  color: kBlack,
+                                  letterSpacing: -0.5,
+                                  height: 1.2,
+                                ),
+                              ),
+                              Transform.rotate(
+                                angle: -0.04,
+                                child: Container(
+                                  margin: const EdgeInsets.only(left: 2),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: kPurple,
+                                    border: Border.all(
+                                      color: kBlack,
+                                      width: kBorderWidth,
+                                    ),
+                                    borderRadius: BorderRadius.circular(8),
+                                    boxShadow: const [
+                                      BoxShadow(
+                                        color: kBlack,
+                                        offset: Offset(2, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Text(
+                                    "Quiz",
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.w900,
+                                      color: kBlack,
+                                      letterSpacing: -0.5,
+                                      height: 1.2,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            "Halo, $_username 👋",
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                              color: kBlack,
+                            ),
+                          ),
+                        ],
                       ),
-                      RichText(
-                        text: TextSpan(
-                          children: [
-                            TextSpan(
-                              text: "Nusa",
-                              style: GoogleFonts.poppins(
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black87,
-                              ),
+                      GestureDetector(
+                        onLongPress: () => _showAdaptiveInfo(context),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: kLime,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: kBlack,
+                              width: kBorderWidth,
                             ),
-                            TextSpan(
-                              text: "Quiz",
-                              style: GoogleFonts.poppins(
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.teal,
+                            boxShadow: const [
+                              BoxShadow(color: kBlack, offset: Offset(2, 2)),
+                            ],
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.auto_awesome,
+                                color: kBlack,
+                                size: 16,
                               ),
-                            ),
-                          ],
+                              const SizedBox(width: 4),
+                              Text(
+                                "AI AKTIF",
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w900,
+                                  color: kBlack,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ],
                   ),
+                ),
 
-                  // BADGE AI
-                  GestureDetector(
-                    onTap: () {},
-                    onLongPress: () => _showAdaptiveInfo(context),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.teal.shade50,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: Colors.teal.shade100),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.teal.withOpacity(0.1),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.auto_awesome,
-                            color: Colors.teal.shade600,
-                            size: 16,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            "Adaptif AI",
-                            style: GoogleFonts.poppins(
-                              color: Colors.teal.shade800,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            Expanded(
-              child: RefreshIndicator(
-                onRefresh: () async {
-                  await Future.delayed(const Duration(milliseconds: 500));
-                  _loadAvailableQuizzesWithProgress();
-                },
-                color: Colors.teal,
-                backgroundColor: Colors.white,
-                child: CustomScrollView(
-                  slivers: [
-                    // 2. KARTU LEVEL (Info Level & Sekolah)
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(
-                          24,
-                          10,
-                          24,
-                          10,
-                        ), // Padding bawah dikurangi
-                        child: Container(
-                          padding: const EdgeInsets.all(20),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                Colors.teal.shade700,
-                                Colors.teal.shade400,
-                              ],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            borderRadius: BorderRadius.circular(20),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.teal.withOpacity(0.3),
-                                blurRadius: 10,
-                                offset: const Offset(0, 5),
+                Expanded(
+                  child: RefreshIndicator(
+                    onRefresh: () async {
+                      await Future.delayed(const Duration(milliseconds: 500));
+                      _loadAvailableQuizzesWithProgress();
+                    },
+                    color: kBlack,
+                    backgroundColor: kLime,
+                    child: CustomScrollView(
+                      physics: const BouncingScrollPhysics(),
+                      slivers: [
+                        // 2. HERO CARD (Rotated Trophy)
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(24, 10, 24, 20),
+                            child: Container(
+                              padding: const EdgeInsets.all(24),
+                              decoration: BoxDecoration(
+                                color: kPurple,
+                                border: Border.all(
+                                  color: kBlack,
+                                  width: kBorderWidth,
+                                ),
+                                borderRadius: BorderRadius.circular(20),
+                                boxShadow: const [
+                                  BoxShadow(
+                                    color: kBlack,
+                                    offset: Offset(4, 4),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
-                          child: Column(
-                            children: [
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Column(
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
-                                      Text(
-                                        "Level Kuis Kamu",
-                                        style: GoogleFonts.poppins(
-                                          fontSize: 10,
-                                          color: Colors.white70,
-                                        ),
+                                      Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            "LEVEL KUIS KAMU",
+                                            style: GoogleFonts.plusJakartaSans(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w900,
+                                              color: kBlack,
+                                              letterSpacing: 0.5,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            "Level $_studentLevel",
+                                            style: GoogleFonts.plusJakartaSans(
+                                              fontSize: 40,
+                                              fontWeight: FontWeight.w900,
+                                              color: kBlack,
+                                              height: 1,
+                                              letterSpacing: -1,
+                                            ),
+                                          ),
+                                        ],
                                       ),
-                                      Text(
-                                        "Level $_studentLevel",
-                                        style: GoogleFonts.poppins(
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.white,
-                                          fontSize: 22,
+                                      Transform.rotate(
+                                        angle: 0.17, // Sekitar 10 derajat
+                                        child: const Icon(
+                                          Icons.emoji_events_rounded,
+                                          color: Color(0xFFFFC107),
+                                          size: 48,
+                                          shadows: [
+                                            Shadow(
+                                              color: kBlack,
+                                              offset: Offset(2, 2),
+                                            ),
+                                          ],
                                         ),
                                       ),
                                     ],
                                   ),
-                                  const Icon(
-                                    Icons.emoji_events_rounded,
-                                    color: Colors.amber,
-                                    size: 40,
+                                  const SizedBox(height: 16),
+                                  Container(
+                                    height: 2,
+                                    color: kBlack,
+                                    width: double.infinity,
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Row(
+                                    children: [
+                                      Container(
+                                        width: 40,
+                                        height: 40,
+                                        decoration: BoxDecoration(
+                                          color: kWhite,
+                                          border: Border.all(
+                                            color: kBlack,
+                                            width: kBorderWidth,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                          boxShadow: const [
+                                            BoxShadow(
+                                              color: kBlack,
+                                              offset: Offset(2, 2),
+                                            ),
+                                          ],
+                                        ),
+                                        child: const Icon(
+                                          Icons.school_rounded,
+                                          color: kBlack,
+                                          size: 20,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Text(
+                                          _school,
+                                          style: GoogleFonts.plusJakartaSans(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w900,
+                                            color: kBlack,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 15),
-                              Container(height: 1, color: Colors.white24),
-                              const SizedBox(height: 12),
-                              Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(6),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white24,
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: const Icon(
-                                      Icons.school_rounded,
-                                      color: Colors.white,
-                                      size: 16,
-                                    ),
+                            ),
+                          ),
+                        ),
+
+                        // 3. FILTERS (Level & Kategori)
+                        SliverToBoxAdapter(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Level Buttons
+                              Container(
+                                height: 40,
+                                margin: const EdgeInsets.only(bottom: 20),
+                                child: ListView.separated(
+                                  scrollDirection: Axis.horizontal,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 24,
                                   ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Text(
-                                      _school,
-                                      style: GoogleFonts.poppins(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w500,
-                                        fontSize: 13,
+                                  itemCount: _levels.length,
+                                  separatorBuilder: (c, i) =>
+                                      const SizedBox(width: 10),
+                                  itemBuilder: (context, index) {
+                                    final lvl = _levels[index];
+                                    final isSelected = _selectedLevel == lvl;
+                                    return GestureDetector(
+                                      onTap: () {
+                                        setState(() => _selectedLevel = lvl);
+                                        _loadAvailableQuizzesWithProgress();
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 24,
+                                        ),
+                                        alignment: Alignment.center,
+                                        decoration: BoxDecoration(
+                                          color: isSelected ? kLime : kWhite,
+                                          borderRadius: BorderRadius.circular(
+                                            14,
+                                          ),
+                                          border: Border.all(
+                                            color: kBlack,
+                                            width: kBorderWidth,
+                                          ),
+                                          boxShadow: const [
+                                            BoxShadow(
+                                              color: kBlack,
+                                              offset: Offset(2, 2),
+                                            ),
+                                          ],
+                                        ),
+                                        child: Text(
+                                          lvl == 0 ? "Auto Mode" : "Level $lvl",
+                                          style: GoogleFonts.plusJakartaSans(
+                                            color: kBlack,
+                                            fontSize: 13,
+                                            fontWeight: isSelected
+                                                ? FontWeight.w900
+                                                : FontWeight.w800,
+                                          ),
+                                        ),
                                       ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
+                                    );
+                                  },
+                                ),
+                              ),
+                              // Category Pills
+                              Container(
+                                height: 32,
+                                margin: const EdgeInsets.only(bottom: 20),
+                                child: ListView.builder(
+                                  scrollDirection: Axis.horizontal,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 24,
                                   ),
-                                ],
+                                  itemCount: _categories.length,
+                                  itemBuilder: (context, index) {
+                                    final category = _categories[index];
+                                    final isSelected =
+                                        _selectedCategory == category;
+                                    return GestureDetector(
+                                      onTap: () {
+                                        setState(() {
+                                          _selectedCategory = category;
+                                          _isLoading = true;
+                                        });
+                                        _loadAvailableQuizzesWithProgress();
+                                      },
+                                      child: Container(
+                                        margin: const EdgeInsets.only(
+                                          right: 12,
+                                        ),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                        ),
+                                        alignment: Alignment.center,
+                                        decoration: BoxDecoration(
+                                          color: isSelected
+                                              ? kWhite.withOpacity(0.5)
+                                              : Colors.transparent,
+                                          border: Border.all(
+                                            color: isSelected
+                                                ? kBlack
+                                                : Colors.transparent,
+                                            width: kBorderWidth,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            20,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          category,
+                                          style: GoogleFonts.plusJakartaSans(
+                                            color: isSelected
+                                                ? kBlack
+                                                : const Color(0xFF6B6B6B),
+                                            fontWeight: isSelected
+                                                ? FontWeight.w900
+                                                : FontWeight.w800,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
                               ),
                             ],
                           ),
                         ),
-                      ),
-                    ),
 
-                    // 3. FILTER (Level & Kategori)
-                    SliverToBoxAdapter(
-                      child: Column(
-                        children: [
-                          // Level Selector
-                          Container(
-                            height: 40,
-                            margin: const EdgeInsets.only(top: 20),
-                            child: ListView.separated(
-                              scrollDirection: Axis.horizontal,
+                        // 4. GRID KUIS ATAU EMPTY STATE
+                        if (!_isLoading && _quizList.isEmpty)
+                          SliverFillRemaining(
+                            hasScrollBody: false,
+                            child: Padding(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 24,
                               ),
-                              itemCount: _levels.length,
-                              separatorBuilder: (c, i) =>
-                                  const SizedBox(width: 8),
-                              itemBuilder: (context, index) {
-                                final lvl = _levels[index];
-                                final isSelected = _selectedLevel == lvl;
-                                return GestureDetector(
-                                  onTap: () {
-                                    setState(() => _selectedLevel = lvl);
-                                    _loadAvailableQuizzesWithProgress();
-                                  },
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 16,
+                              child: Container(
+                                margin: const EdgeInsets.only(bottom: 40),
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 40,
+                                  horizontal: 20,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: kWhite,
+                                  border: Border.all(
+                                    color: kBlack,
+                                    width: 2,
+                                  ), // Solid border as dashed replacement in mobile
+                                  borderRadius: BorderRadius.circular(20),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: kBlack.withOpacity(0.1),
+                                      offset: const Offset(4, 4),
                                     ),
-                                    decoration: BoxDecoration(
-                                      color: isSelected
-                                          ? Colors.teal
-                                          : Colors.white,
-                                      borderRadius: BorderRadius.circular(20),
-                                      border: Border.all(
-                                        color: isSelected
-                                            ? Colors.teal
-                                            : Colors.grey.shade300,
+                                  ],
+                                ),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.assignment_late_rounded,
+                                      size: 48,
+                                      color: kBlack.withOpacity(0.5),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Text(
+                                      "BELUM ADA KUIS",
+                                      style: GoogleFonts.plusJakartaSans(
+                                        color: kBlack.withOpacity(0.6),
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 14,
+                                        letterSpacing: 0.5,
                                       ),
                                     ),
-                                    alignment: Alignment.center,
-                                    child: Text(
-                                      lvl == 0 ? "Auto" : "Lv $lvl",
-                                      style: GoogleFonts.poppins(
-                                        color: isSelected
-                                            ? Colors.white
-                                            : Colors.grey.shade600,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-
-                          // Category Selector
-                          Container(
-                            height: 40,
-                            margin: const EdgeInsets.symmetric(vertical: 12),
-                            child: ListView.builder(
-                              scrollDirection: Axis.horizontal,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 24,
-                              ),
-                              itemCount: _categories.length,
-                              itemBuilder: (context, index) {
-                                final category = _categories[index];
-                                final isSelected =
-                                    _selectedCategory == category;
-                                return GestureDetector(
-                                  onTap: () {
-                                    setState(() {
-                                      _selectedCategory = category;
-                                      _isLoading = true;
-                                    });
-                                    _loadAvailableQuizzesWithProgress();
-                                  },
-                                  child: Container(
-                                    margin: const EdgeInsets.only(right: 20),
-                                    alignment: Alignment.center,
-                                    child: Column(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: [
-                                        Text(
-                                          category,
-                                          style: GoogleFonts.poppins(
-                                            color: isSelected
-                                                ? Colors.black87
-                                                : Colors.grey.shade400,
-                                            fontWeight: isSelected
-                                                ? FontWeight.bold
-                                                : FontWeight.w500,
-                                            fontSize: 13,
-                                          ),
-                                        ),
-                                        if (isSelected)
-                                          Container(
-                                            margin: const EdgeInsets.only(
-                                              top: 4,
-                                            ),
-                                            width: 4,
-                                            height: 4,
-                                            decoration: const BoxDecoration(
-                                              color: Colors.teal,
-                                              shape: BoxShape.circle,
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    // 4. GRID KUIS
-                    _isLoading
-                        ? const SliverFillRemaining(
-                            child: Center(
-                              child: CircularProgressIndicator(
-                                color: Colors.teal,
+                                  ],
+                                ),
                               ),
                             ),
                           )
-                        : _quizList.isEmpty
-                        ? SliverFillRemaining(
-                            child: Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.assignment_late_outlined,
-                                    size: 60,
-                                    color: Colors.grey.shade300,
-                                  ),
-                                  const SizedBox(height: 10),
-                                  Text(
-                                    "Tidak ada kuis tersedia",
-                                    style: GoogleFonts.poppins(
-                                      color: Colors.grey,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          )
-                        : SliverPadding(
+                        else if (!_isLoading && _quizList.isNotEmpty)
+                          SliverPadding(
                             padding: const EdgeInsets.symmetric(horizontal: 24),
                             sliver: SliverGrid(
                               gridDelegate:
@@ -565,190 +738,244 @@ class _KuisTabState extends State<KuisTab> {
                                     );
                                     _loadAvailableQuizzesWithProgress();
                                   },
-                                  child: _QuizGridCard(item: item),
+                                  child: _QuizGridCard(
+                                    item: item,
+                                    index: index,
+                                  ),
                                 );
                               }, childCount: _quizList.length),
                             ),
                           ),
-                    const SliverToBoxAdapter(child: SizedBox(height: 30)),
-                  ],
+                        const SliverToBoxAdapter(child: SizedBox(height: 100)),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
-          ],
-        ),
+          ),
+
+          if (_isLoading) _buildGlassmorphismLoader(),
+        ],
       ),
     );
   }
 }
 
-// CARD KUIS (GRID DESIGN + PROGRESS BAR)
+// --- CARD KUIS NEO-BRUTALISM ---
 class _QuizGridCard extends StatelessWidget {
   final Map<String, dynamic> item;
-  const _QuizGridCard({required this.item});
+  final int index;
+
+  const _QuizGridCard({required this.item, required this.index});
 
   @override
   Widget build(BuildContext context) {
     String? localPath = item['local_image_path'];
     bool hasLocalImage = localPath != null && File(localPath).existsSync();
 
-    // Hitung Progress
     int total = item['total_questions'] as int? ?? 0;
     int answered = item['answered_questions'] as int? ?? 0;
     double progress = total == 0 ? 0 : answered / total;
     if (progress > 1.0) progress = 1.0;
     bool isCompleted = progress == 1.0;
 
+    List<Color> boxColors = [
+      const Color(0xFFFFDEB3),
+      const Color(0xFFB3E5FF),
+      const Color(0xFFFFB3D9),
+      const Color(0xFFE0F7FA),
+    ];
+    Color imageBgColor = boxColors[index % boxColors.length];
+
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-        border: isCompleted
-            ? Border.all(color: Colors.amber.shade300, width: 2)
-            : null,
+        color: kWhite,
+        border: Border.all(color: kBlack, width: kBorderWidth),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: const [BoxShadow(color: kBlack, offset: Offset(4, 4))],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // GAMBAR
+          // 1. BAGIAN GAMBAR
           Expanded(
-            flex: 4,
-            child: Stack(
-              children: [
-                Container(
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: Colors.orange.shade50,
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(16),
-                    ),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(16),
-                    ),
-                    child: hasLocalImage
-                        ? Image.file(File(localPath), fit: BoxFit.cover)
-                        : Center(
-                            child: Icon(
-                              Icons.quiz_rounded,
-                              size: 30,
-                              color: Colors.orange.shade200,
+            child: Container(
+              decoration: BoxDecoration(
+                color: imageBgColor,
+                border: const Border(
+                  bottom: BorderSide(color: kBlack, width: kBorderWidth),
+                ),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(18),
+                ),
+              ),
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: ClipRRect(
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(18),
+                      ),
+                      child: hasLocalImage
+                          ? Image.file(File(localPath), fit: BoxFit.cover)
+                          : Center(
+                              child: Icon(
+                                Icons.videogame_asset_rounded,
+                                size: 40,
+                                color: kBlack.withOpacity(0.5),
+                              ),
                             ),
-                          ),
-                  ),
-                ),
-                Positioned(
-                  top: 8,
-                  left: 8,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.95),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      (item['category'] ?? 'UMUM').toString().toUpperCase(),
-                      style: GoogleFonts.poppins(
-                        fontSize: 8,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.teal.shade700,
-                      ),
                     ),
                   ),
-                ),
-                if (isCompleted)
                   Positioned(
-                    top: 8,
-                    right: 8,
+                    top: 10,
+                    left: 10,
                     child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
                       ),
-                      child: const Icon(
-                        Icons.check_circle,
-                        color: Colors.amber,
-                        size: 16,
+                      decoration: BoxDecoration(
+                        color: kWhite,
+                        border: Border.all(color: kBlack, width: kBorderWidth),
+                        borderRadius: BorderRadius.circular(8),
+                        boxShadow: const [
+                          BoxShadow(color: kBlack, offset: Offset(2, 2)),
+                        ],
+                      ),
+                      child: Text(
+                        (item['category'] ?? 'UMUM').toString().toUpperCase(),
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w900,
+                          color: kBlack,
+                        ),
                       ),
                     ),
                   ),
-              ],
+                  if (isCompleted)
+                    Positioned(
+                      top: 10,
+                      right: 10,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: kLime,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: kBlack,
+                            width: kBorderWidth,
+                          ),
+                        ),
+                        child: const Icon(
+                          Icons.check_rounded,
+                          color: kBlack,
+                          size: 14,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
 
-          // INFO
-          Expanded(
-            flex: 3,
-            child: Padding(
-              padding: const EdgeInsets.all(10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item['title_indo'] ?? 'Kuis',
-                    style: GoogleFonts.poppins(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12,
-                      height: 1.2,
-                      color: Colors.black87,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+          // 2. BAGIAN TEKS DAN PROGRESS
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min, // Defensive flex
+              children: [
+                Text(
+                  item['title_indo'] ?? 'Kuis',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 13,
+                    height: 1.3,
+                    color: kBlack,
                   ),
-                  const Spacer(),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            isCompleted ? "Selesai" : "$answered/$total",
-                            style: GoogleFonts.poppins(
-                              fontSize: 9,
-                              color: Colors.grey,
-                            ),
-                          ),
-                          Text(
-                            "${(progress * 100).toInt()}%",
-                            style: GoogleFonts.poppins(
-                              fontSize: 9,
-                              fontWeight: FontWeight.bold,
-                              color: isCompleted ? Colors.amber : Colors.teal,
-                            ),
-                          ),
-                        ],
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      isCompleted ? "Selesai" : "$answered/$total Soal",
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        color: kBlack.withOpacity(0.6),
                       ),
-                      const SizedBox(height: 4),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(2),
-                        child: LinearProgressIndicator(
-                          value: progress,
-                          minHeight: 4,
-                          backgroundColor: Colors.grey.shade100,
-                          color: isCompleted ? Colors.amber : Colors.teal,
+                    ),
+                    Text(
+                      "${(progress * 100).toInt()}%",
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w900,
+                        color: kBlack,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                // Custom Neo-Brutalist Progress Bar
+                Container(
+                  height: 8,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: kWhite,
+                    border: Border.all(color: kBlack, width: 1.0),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  alignment: Alignment.centerLeft,
+                  child: FractionallySizedBox(
+                    widthFactor: progress,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: isCompleted ? kLime : kPurple,
+                        border: Border(
+                          right: BorderSide(
+                            color: kBlack,
+                            width: progress > 0 ? 1.0 : 0,
+                          ),
+                        ),
+                        borderRadius: const BorderRadius.horizontal(
+                          left: Radius.circular(3),
                         ),
                       ),
-                    ],
+                    ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ],
       ),
     );
   }
+}
+
+// --- BACKGROUND GRID PAINTER ---
+class GridPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.black.withOpacity(0.06)
+      ..strokeWidth = 1;
+
+    const double step = 32.0;
+
+    for (double i = 0; i < size.width; i += step) {
+      canvas.drawLine(Offset(i, 0), Offset(i, size.height), paint);
+    }
+    for (double j = 0; j < size.height; j += step) {
+      canvas.drawLine(Offset(0, j), Offset(size.width, j), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -18,6 +19,13 @@ import 'package:nusalearn/ui/screens/profile/change_password_screen.dart';
 import 'package:nusalearn/ui/screens/profile/language_screen.dart';
 import 'package:nusalearn/ui/screens/profile/help_center_screen.dart';
 
+// --- KONSTANTA NEO-BRUTALISM ---
+const Color kLime = Color(0xFFD2F945);
+const Color kPurple = Color.fromARGB(255, 156, 132, 242);
+const Color kBlack = Color(0xFF000000);
+const Color kWhite = Color(0xFFFFFFFF);
+const double kBorderWidth = 2.0; // Ketebalan border tegas khas brutalism
+
 class ProfileTab extends StatefulWidget {
   const ProfileTab({super.key});
 
@@ -25,9 +33,9 @@ class ProfileTab extends StatefulWidget {
   State<ProfileTab> createState() => _ProfileTabState();
 }
 
-class _ProfileTabState extends State<ProfileTab> {
-  // --- Variables & State ---
-  String _userName = "User";
+class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
+  // === LOGIKA INTI (TIDAK DISENTUH) ===
+  String _userName = "Memuat...";
   String _school = "...";
   File? _localImage;
   String? _serverImageUrl;
@@ -36,11 +44,24 @@ class _ProfileTabState extends State<ProfileTab> {
   int _totalXP = 0;
 
   bool _isUploadingImage = false;
+  bool _isLoadingData = true;
+
+  AnimationController? _spinController;
 
   @override
   void initState() {
     super.initState();
+    _spinController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat();
     _loadUser();
+  }
+
+  @override
+  void dispose() {
+    _spinController?.dispose();
+    super.dispose();
   }
 
   void _loadUser() async {
@@ -84,9 +105,14 @@ class _ProfileTabState extends State<ProfileTab> {
         _totalXP = totalXP;
       });
     }
+
+    // Fake delay untuk menyamakan animasi transisi HTML yang diminta
+    await Future.delayed(const Duration(milliseconds: 600));
+    if (mounted) {
+      setState(() => _isLoadingData = false);
+    }
   }
 
-  // --- LOGIC: GANTI FOTO ---
   Future<void> _pickAndUploadImage() async {
     final picker = ImagePicker();
     try {
@@ -137,7 +163,6 @@ class _ProfileTabState extends State<ProfileTab> {
         await prefs.remove('user_image_path');
         _loadUser();
 
-        // ✅ FIXED: Sekarang memanggil Pop Up Sukses, BUKAN SnackBar
         if (mounted) _showSuccessPopup();
       }
     } on DioException catch (e) {
@@ -151,113 +176,25 @@ class _ProfileTabState extends State<ProfileTab> {
     }
   }
 
-  // --- HELPER DIALOGS ---
-
   void _showSnackBar(String message, {bool isError = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message),
-        backgroundColor: isError ? Colors.red : Colors.green,
+        content: Text(
+          message,
+          style: GoogleFonts.plusJakartaSans(
+            fontWeight: FontWeight.w700,
+            color: isError ? Colors.white : kBlack,
+          ),
+        ),
+        backgroundColor: isError ? const Color(0xFFFF4C4C) : kLime,
         behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          side: const BorderSide(color: kBlack, width: kBorderWidth),
+          borderRadius: BorderRadius.circular(12),
+        ),
       ),
     );
   }
-
-  void _showSuccessPopup() {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return Dialog(
-          backgroundColor: Colors.transparent,
-          insetPadding: const EdgeInsets.symmetric(horizontal: 24),
-          child: TweenAnimationBuilder(
-            duration: const Duration(milliseconds: 400),
-            tween: Tween<double>(begin: 0.8, end: 1.0),
-            curve: Curves.easeOutBack,
-            builder: (context, double val, child) {
-              return Transform.scale(scale: val, child: child);
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(32),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
-                    blurRadius: 20,
-                    offset: const Offset(0, 10),
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 80,
-                    height: 80,
-                    margin: const EdgeInsets.only(bottom: 24),
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFE0F2F1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.check_circle_rounded,
-                      color: Color(0xFF009688),
-                      size: 40,
-                    ),
-                  ),
-                  Text(
-                    "Profil Berhasil Diupdate!",
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: const Color(0xFF1E293B),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    "Tampilan profilmu sekarang makin keren!",
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 14,
-                      color: const Color(0xFF64748B),
-                      height: 1.5,
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF009688),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
-                      child: Text(
-                        "Mantap!",
-                        style: GoogleFonts.plusJakartaSans(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  // --- NAVIGATION ---
 
   void _logout() async {
     final prefs = await SharedPreferences.getInstance();
@@ -277,14 +214,11 @@ class _ProfileTabState extends State<ProfileTab> {
       MaterialPageRoute(builder: (context) => page),
     );
 
-    // ✅ FIXED: Menghilangkan if (page is EditProfileScreen) _showSuccessPopup();
-    // Hanya refresh data saja, karena EditProfileScreen sudah punya popup sendiri.
     if (result == true) {
       _loadUser();
     }
   }
 
-  // --- LOGIC SYNC ---
   Future<void> _handleForceSync() async {
     _showSnackBar("🔄 Memaksa Full Sync...");
     try {
@@ -300,81 +234,409 @@ class _ProfileTabState extends State<ProfileTab> {
       if (mounted) _showSnackBar("❌ Error: $e", isError: true);
     }
   }
+  // === AKHIR LOGIKA INTI ===
 
-  // --- UI BUILD ---
+  // === UI UPDATE: LOADER (GLASSMORPHISM) ===
+  Widget _buildGlassmorphismLoader() {
+    return Positioned.fill(
+      child: ClipRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 5.0, sigmaY: 5.0),
+          child: Container(
+            color: Colors.transparent,
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+                decoration: BoxDecoration(
+                  color: kLime,
+                  border: Border.all(color: kBlack, width: kBorderWidth),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: const [
+                    BoxShadow(color: kBlack, offset: Offset(4, 4)),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    RotationTransition(
+                      turns: _spinController ?? const AlwaysStoppedAnimation(0),
+                      child: const Icon(Icons.face_rounded, color: kBlack),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      "Memuat Profil",
+                      style: GoogleFonts.plusJakartaSans(
+                        fontWeight: FontWeight.w900,
+                        color: kBlack,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // === UI UPDATE: DIALOG SUCCESS NEO-BRUTALISM ===
+  void _showSuccessPopup() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+          elevation: 0,
+          child: TweenAnimationBuilder(
+            duration: const Duration(milliseconds: 400),
+            tween: Tween<double>(begin: 0.8, end: 1.0),
+            curve: Curves.easeOutBack,
+            builder: (context, double val, child) {
+              return Transform.scale(scale: val, child: child);
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
+              decoration: BoxDecoration(
+                color: kWhite,
+                borderRadius: BorderRadius.circular(
+                  32,
+                ), // Border Radius yang lebih besar dari HTML
+                border: Border.all(color: kBlack, width: kBorderWidth),
+                boxShadow: const [
+                  BoxShadow(color: kBlack, offset: Offset(8, 8)),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 80,
+                    height: 80,
+                    margin: const EdgeInsets.only(bottom: 24),
+                    decoration: BoxDecoration(
+                      color: kLime, // Accent Lime
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: kBlack, width: kBorderWidth),
+                      boxShadow: const [
+                        BoxShadow(color: kBlack, offset: Offset(4, 4)),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.check_circle_rounded,
+                      color: kBlack,
+                      size: 40,
+                    ),
+                  ),
+                  Text(
+                    "Berhasil Diupdate!",
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900,
+                      color: kBlack,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    "Data dirimu sudah kami simpan. Sekarang tampilan profilmu makin mantap!",
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF6B6B6B),
+                      height: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  SizedBox(
+                    width: double.infinity,
+                    child: GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 18),
+                        decoration: BoxDecoration(
+                          color: kPurple,
+                          border: Border.all(
+                            color: kBlack,
+                            width: kBorderWidth,
+                          ),
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: const [
+                            BoxShadow(color: kBlack, offset: Offset(4, 4)),
+                          ],
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          "OKE, SIAP!",
+                          style: GoogleFonts.plusJakartaSans(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 16,
+                            color: kBlack,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // === UI BUILD ===
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: const Color(0xFF0F0F17),
       body: Stack(
         children: [
-          _buildHeaderBackground(),
-          SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(24, 60, 24, 100),
+          // Background Gradient Neo-Brutalism
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0xFFEAE0FF), Color(0xFFD8C3FF)],
+              ),
+            ),
+          ),
+          CustomPaint(painter: GridPainter(), child: Container()),
+
+          SafeArea(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Text(
-                  "Profil Saya",
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
+                // HEADER TITLE
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 30, 24, 20),
+                  child: Center(
+                    child: Text(
+                      "Profil Saya",
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w900,
+                        color: kBlack,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
                   ),
                 ),
-                const SizedBox(height: 40),
-                _buildProfileCard(),
-                const SizedBox(height: 30),
-                _buildSectionTitle("Akun & Keamanan"),
-                _buildMenuGroup([
-                  _buildMenuItem(
-                    icon: Icons.person_rounded,
-                    title: "Edit Data Diri",
-                    color: Colors.blue,
-                    bgColor: Colors.blue.shade50,
-                    onTap: () => _navigateTo(const EditProfileScreen()),
+
+                Expanded(
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(24, 10, 24, 100),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildProfileCard(),
+                        const SizedBox(
+                          height: 10,
+                        ), // Spacing after profile card
+
+                        _buildSectionTitle("Akun & Keamanan"),
+                        _buildMenuItem(
+                          icon: Icons.person_rounded,
+                          title: "Edit Data Diri",
+                          bgColor: const Color(0xFFB3E5FF), // Blue
+                          onTap: () => _navigateTo(const EditProfileScreen()),
+                        ),
+                        _buildMenuItem(
+                          icon: Icons.lock_rounded,
+                          title: "Ganti Kata Sandi",
+                          bgColor: kPurple, // Purple
+                          onTap: () =>
+                              _navigateTo(const ChangePasswordScreen()),
+                        ),
+
+                        _buildSectionTitle("Umum"),
+                        _buildMenuItem(
+                          icon: Icons.language_rounded,
+                          title: "Bahasa Aplikasi",
+                          bgColor: kLime, // Teal/Lime
+                          onTap: () => _navigateTo(const LanguageScreen()),
+                        ),
+                        _buildMenuItem(
+                          icon: Icons.help_rounded,
+                          title: "Pusat Bantuan",
+                          bgColor: const Color(0xFFFFB3D9), // Pink
+                          onTap: () => _navigateTo(const HelpCenterScreen()),
+                        ),
+
+                        _buildSectionTitle("Developer Zone"),
+                        _buildMenuItem(
+                          icon: Icons.sync_rounded,
+                          title: "Force Delta Sync",
+                          bgColor: const Color(0xFFFFDEB3), // Orange
+                          onTap: _handleForceSync,
+                        ),
+
+                        const SizedBox(height: 20),
+                        _buildLogoutButton(),
+                      ],
+                    ),
                   ),
-                  _buildDivider(),
-                  _buildMenuItem(
-                    icon: Icons.lock_rounded,
-                    title: "Ganti Kata Sandi",
-                    color: Colors.purple,
-                    bgColor: Colors.purple.shade50,
-                    onTap: () => _navigateTo(const ChangePasswordScreen()),
+                ),
+              ],
+            ),
+          ),
+
+          if (_isLoadingData) _buildGlassmorphismLoader(),
+        ],
+      ),
+    );
+  }
+
+  // === WIDGET HELPER METHODS (Neo-Brutalism) ===
+
+  Widget _buildProfileCard() {
+    return Container(
+      margin: const EdgeInsets.only(top: 45, bottom: 20),
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.topCenter,
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(20, 50, 20, 24),
+            decoration: BoxDecoration(
+              color: kPurple,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: kBlack, width: kBorderWidth),
+              boxShadow: const [BoxShadow(color: kBlack, offset: Offset(4, 4))],
+            ),
+            child: Column(
+              children: [
+                Text(
+                  _userName,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    color: kBlack,
+                    letterSpacing: -0.5,
                   ),
-                ]),
-                _buildSectionTitle("Umum"),
-                _buildMenuGroup([
-                  _buildMenuItem(
-                    icon: Icons.language_rounded,
-                    title: "Bahasa Aplikasi",
-                    color: Colors.teal,
-                    bgColor: Colors.teal.shade50,
-                    onTap: () => _navigateTo(const LanguageScreen()),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _school,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: kBlack.withOpacity(0.8),
                   ),
-                  _buildDivider(),
-                  _buildMenuItem(
-                    icon: Icons.help_rounded,
-                    title: "Pusat Bantuan",
-                    color: Colors.redAccent,
-                    bgColor: Colors.red.shade50,
-                    onTap: () => _navigateTo(const HelpCenterScreen()),
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    _buildStatBox(
+                      icon: Icons.military_tech_rounded,
+                      iconColor: const Color(0xFFFFC107),
+                      value: "Lv. $_currentLevel",
+                      label: "Master",
+                    ),
+                    const SizedBox(width: 12),
+                    _buildStatBox(
+                      icon: Icons.bolt_rounded,
+                      iconColor: const Color(0xFF4CAF50),
+                      value: "$_totalXP",
+                      label: "Total XP",
+                    ),
+                    const SizedBox(width: 12),
+                    _buildStatBox(
+                      icon: Icons.verified_rounded,
+                      iconColor: const Color(0xFF2196F3),
+                      value: "12", // Data statis atau sesuaikan variabel
+                      label: "Selesai",
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          // Avatar Menumpuk (Overlapping)
+          Positioned(
+            top: -45,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  width: 90,
+                  height: 90,
+                  decoration: BoxDecoration(
+                    color: kWhite,
+                    borderRadius: BorderRadius.circular(
+                      24,
+                    ), // Sesuai dengan referensi HTML HTML border-radius: 24px
+                    border: Border.all(color: kBlack, width: kBorderWidth),
+                    boxShadow: const [
+                      BoxShadow(color: kBlack, offset: Offset(4, 4)),
+                    ],
                   ),
-                ]),
-                const SizedBox(height: 20),
-                _buildSectionTitle("Developer Zone"),
-                _buildMenuGroup([
-                  _buildMenuItem(
-                    icon: Icons.sync_rounded,
-                    title: "Force Delta Sync",
-                    color: Colors.orange,
-                    bgColor: Colors.orange.shade50,
-                    onTap: _handleForceSync,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(22),
+                    child: _localImage != null
+                        ? Image.file(_localImage!, fit: BoxFit.cover)
+                        : (_serverImageUrl != null
+                              ? Image.network(
+                                  _serverImageUrl!,
+                                  fit: BoxFit.cover,
+                                )
+                              : Icon(
+                                  Icons.person_rounded,
+                                  size: 56,
+                                  color: kBlack.withOpacity(0.8),
+                                )),
                   ),
-                ]),
-                const SizedBox(height: 10),
-                _buildLogoutButton(),
+                ),
+                if (_isUploadingImage)
+                  Container(
+                    width: 90,
+                    height: 90,
+                    decoration: BoxDecoration(
+                      color: kWhite.withOpacity(0.8),
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: const Center(
+                      child: CircularProgressIndicator(
+                        color: kBlack,
+                        strokeWidth: 3,
+                      ),
+                    ),
+                  ),
+                Positioned(
+                  bottom: -10,
+                  right: -10,
+                  child: GestureDetector(
+                    onTap: _isUploadingImage ? null : _pickAndUploadImage,
+                    child: Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: kLime,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: kBlack, width: kBorderWidth),
+                        boxShadow: const [
+                          BoxShadow(color: kBlack, offset: Offset(2, 2)),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.edit_rounded,
+                        size: 18,
+                        color: kBlack,
+                      ),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -383,219 +645,46 @@ class _ProfileTabState extends State<ProfileTab> {
     );
   }
 
-  // --- WIDGET HELPER METHODS (Header, Card, dll sama seperti sebelumnya) ---
-
-  Widget _buildHeaderBackground() {
-    return Container(
-      height: 340,
-      width: double.infinity,
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF009688), Color(0xFF00796B)],
-        ),
-        borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(40),
-          bottomRight: Radius.circular(40),
-        ),
-      ),
-      child: Stack(
-        children: [
-          Positioned(top: -50, right: -50, child: _buildDecoCircle(200)),
-          Positioned(top: 100, left: -40, child: _buildDecoCircle(150)),
-          Positioned(top: 40, right: 80, child: _buildDecoCircle(80)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDecoCircle(double size) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(color: Colors.white.withOpacity(0.1), width: 1),
-        color: Colors.white.withOpacity(0.05),
-      ),
-    );
-  }
-
-  Widget _buildProfileCard() {
-    return Stack(
-      clipBehavior: Clip.none,
-      alignment: Alignment.topCenter,
-      children: [
-        Container(
-          width: double.infinity,
-          margin: const EdgeInsets.only(top: 50),
-          padding: const EdgeInsets.fromLTRB(24, 60, 24, 32),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.95),
-            borderRadius: BorderRadius.circular(32),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 40,
-                offset: const Offset(0, 10),
-              ),
-            ],
-            border: Border.all(color: Colors.white, width: 2),
-          ),
-          child: Column(
-            children: [
-              Text(
-                _userName,
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  color: const Color(0xFF1E293B),
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                _school,
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: const Color(0xFF64748B),
-                ),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                children: [
-                  _buildStatBox(
-                    icon: Icons.military_tech_rounded,
-                    value: "Lv. $_currentLevel",
-                    label: "Master",
-                    iconColor: Colors.amber,
-                  ),
-                  const SizedBox(width: 12),
-                  _buildStatBox(
-                    icon: Icons.bolt_rounded,
-                    value: "$_totalXP",
-                    label: "Total XP",
-                    iconColor: Colors.blue,
-                  ),
-                  const SizedBox(width: 12),
-                  _buildStatBox(
-                    icon: Icons.verified_rounded,
-                    value: "12",
-                    label: "Selesai",
-                    iconColor: Colors.green,
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        Positioned(
-          top: 0,
-          child: Stack(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white,
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF009688).withOpacity(0.25),
-                      blurRadius: 25,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
-                ),
-                child: CircleAvatar(
-                  radius: 50,
-                  backgroundColor: const Color(0xFFE0F2F1),
-                  backgroundImage: _localImage != null
-                      ? FileImage(_localImage!) as ImageProvider
-                      : (_serverImageUrl != null
-                            ? NetworkImage(_serverImageUrl!)
-                            : null),
-                  child: (_isUploadingImage)
-                      ? const CircularProgressIndicator(
-                          color: Color(0xFF009688),
-                        )
-                      : ((_localImage == null && _serverImageUrl == null)
-                            ? const Icon(
-                                Icons.person,
-                                size: 50,
-                                color: Color(0xFF009688),
-                              )
-                            : null),
-                ),
-              ),
-              Positioned(
-                bottom: 0,
-                right: 0,
-                child: GestureDetector(
-                  onTap: _isUploadingImage ? null : _pickAndUploadImage,
-                  child: Container(
-                    width: 34,
-                    height: 34,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1E293B),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 3),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
-                          blurRadius: 5,
-                        ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.edit,
-                      size: 16,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildStatBox({
     required IconData icon,
+    required Color iconColor,
     required String value,
     required String label,
-    required Color iconColor,
   }) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
         decoration: BoxDecoration(
-          color: const Color(0xFFF8FAFC),
+          color: kWhite,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFF1F5F9)),
+          border: Border.all(color: kBlack, width: kBorderWidth),
+          boxShadow: const [BoxShadow(color: kBlack, offset: Offset(2, 2))],
         ),
         child: Column(
           children: [
-            Icon(icon, color: iconColor, size: 22),
+            Icon(icon, color: iconColor, size: 24),
             const SizedBox(height: 6),
             Text(
               value,
               style: GoogleFonts.plusJakartaSans(
-                fontSize: 15,
-                fontWeight: FontWeight.w800,
-                color: const Color(0xFF1E293B),
+                fontSize: 16,
+                fontWeight: FontWeight.w900,
+                color: kBlack,
+                height: 1.1,
               ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
-            const SizedBox(height: 2),
+            const SizedBox(height: 4),
             Text(
               label,
               style: GoogleFonts.plusJakartaSans(
                 fontSize: 10,
-                fontWeight: FontWeight.w600,
-                color: const Color(0xFF64748B),
-                letterSpacing: 0.5,
+                fontWeight: FontWeight.w800,
+                color: kBlack.withOpacity(0.7),
+                textStyle: const TextStyle(
+                  textBaseline: TextBaseline.alphabetic,
+                ),
               ),
             ),
           ],
@@ -607,117 +696,118 @@ class _ProfileTabState extends State<ProfileTab> {
   Widget _buildSectionTitle(String title) {
     return Container(
       width: double.infinity,
-      margin: const EdgeInsets.only(left: 12, bottom: 12, top: 10),
+      margin: const EdgeInsets.only(left: 4, bottom: 16, top: 12),
       child: Text(
         title.toUpperCase(),
         style: GoogleFonts.plusJakartaSans(
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-          color: const Color(0xFF64748B),
-          letterSpacing: 1.0,
+          fontSize: 13,
+          fontWeight: FontWeight.w900,
+          color: kBlack,
+          letterSpacing: 0.5,
         ),
       ),
-    );
-  }
-
-  Widget _buildMenuGroup(List<Widget> children) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 20,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(children: children),
     );
   }
 
   Widget _buildMenuItem({
     required IconData icon,
     required String title,
-    required Color color,
     required Color bgColor,
     required VoidCallback onTap,
   }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(24),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: bgColor,
-                  borderRadius: BorderRadius.circular(12),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: kWhite,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: kBlack, width: kBorderWidth),
+          boxShadow: const [BoxShadow(color: kBlack, offset: Offset(4, 4))],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: bgColor,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: kBlack, width: kBorderWidth),
+              ),
+              child: Icon(icon, color: kBlack, size: 22),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                title,
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: kBlack,
                 ),
-                child: Icon(icon, color: color, size: 22),
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Text(
-                  title,
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: const Color(0xFF1E293B),
-                  ),
-                ),
-              ),
-              const Icon(
-                Icons.chevron_right_rounded,
-                color: Color(0xFFCBD5E1),
-                size: 24,
-              ),
-            ],
-          ),
+            ),
+            const Icon(Icons.chevron_right_rounded, color: kBlack, size: 28),
+          ],
         ),
       ),
-    );
-  }
-
-  Widget _buildDivider() {
-    return const Divider(
-      height: 1,
-      thickness: 1,
-      color: Color(0xFFF1F5F9),
-      indent: 70,
     );
   }
 
   Widget _buildLogoutButton() {
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(top: 24),
-      child: TextButton.icon(
-        onPressed: _logout,
-        style: TextButton.styleFrom(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          backgroundColor: const Color(0xFFFEF2F2),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: const BorderSide(color: Color(0xFFFECACA)),
-          ),
+    return GestureDetector(
+      onTap: _logout,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 18),
+        margin: const EdgeInsets.only(top: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFF4C4C), // Merah terang
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: kBlack, width: kBorderWidth),
+          boxShadow: const [BoxShadow(color: kBlack, offset: Offset(4, 4))],
         ),
-        icon: const Icon(Icons.logout_rounded, color: Color(0xFFEF4444)),
-        label: Text(
-          "Keluar Aplikasi",
-          style: GoogleFonts.plusJakartaSans(
-            fontSize: 14,
-            fontWeight: FontWeight.w700,
-            color: const Color(0xFFEF4444),
-          ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.logout_rounded, color: kWhite, size: 20),
+            const SizedBox(width: 8),
+            Text(
+              "KELUAR APLIKASI",
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 15,
+                fontWeight: FontWeight.w900,
+                color: kWhite,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
+}
+
+// --- BACKGROUND GRID PAINTER ---
+class GridPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.black.withOpacity(0.06)
+      ..strokeWidth = 1;
+
+    const double step = 32.0;
+
+    for (double i = 0; i < size.width; i += step) {
+      canvas.drawLine(Offset(i, 0), Offset(i, size.height), paint);
+    }
+    for (double j = 0; j < size.height; j += step) {
+      canvas.drawLine(Offset(0, j), Offset(size.width, j), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

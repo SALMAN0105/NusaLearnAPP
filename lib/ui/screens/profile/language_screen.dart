@@ -6,6 +6,13 @@ import 'package:nusalearn/core/database/database_helper.dart';
 import 'package:nusalearn/core/services/dictionary_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+// --- KONSTANTA NEO-BRUTALISM ---
+const Color kLime = Color(0xFFD2F945);
+const Color kPurple = Color.fromARGB(255, 156, 132, 242);
+const Color kBlack = Color(0xFF000000);
+const Color kWhite = Color(0xFFFFFFFF);
+const double kBorderWidth = 2.0;
+
 class LanguageScreen extends StatefulWidget {
   const LanguageScreen({super.key});
 
@@ -14,10 +21,10 @@ class LanguageScreen extends StatefulWidget {
 }
 
 class _LanguageScreenState extends State<LanguageScreen> {
-  // State
+  // === LOGIC INTI (TIDAK DISENTUH) ===
   bool _useLocalLanguage = false;
-  String? _userLanguageCode; // Kode bahasa (misal: 'tolaki')
-  String? _userLanguageName; // Nama bahasa (misal: 'Bahasa Tolaki')
+  String? _userLanguageCode;
+  String? _userLanguageName;
 
   bool _isDictionaryReady = false;
   bool _isDownloading = false;
@@ -28,7 +35,6 @@ class _LanguageScreenState extends State<LanguageScreen> {
     _loadLanguageSettings();
   }
 
-  // --- LOGIC: LOAD SETTINGS ---
   Future<void> _loadLanguageSettings() async {
     final db = await DatabaseHelper.instance.database;
     final userList = await db.query('users', limit: 1);
@@ -57,11 +63,9 @@ class _LanguageScreenState extends State<LanguageScreen> {
         );
       }
     }
-
     if (mounted) setState(() {});
   }
 
-  // Helper untuk mengubah kode menjadi nama yang bagus
   String _getLanguageName(String? code) {
     if (code == null) return "Bahasa Daerah";
     switch (code.toLowerCase()) {
@@ -76,13 +80,11 @@ class _LanguageScreenState extends State<LanguageScreen> {
       case 'sun':
         return "Bahasa Sunda";
       default:
-        return "Bahasa ${code[0].toUpperCase()}${code.substring(1)}"; // Capitalize
+        return "Bahasa ${code[0].toUpperCase()}${code.substring(1)}";
     }
   }
 
-  // --- LOGIC: ACTION SWITCH LANGUAGE ---
   Future<void> _switchLanguage(bool useLocal) async {
-    // Jika memilih bahasa daerah tapi kamus belum ada, tawarkan download
     if (useLocal && !_isDictionaryReady && _userLanguageCode != null) {
       _showDownloadConfirmation();
       return;
@@ -92,36 +94,27 @@ class _LanguageScreenState extends State<LanguageScreen> {
     bool success = await authProvider.switchLanguage(useLocal);
 
     if (success) {
-      setState(() {
-        _useLocalLanguage = useLocal;
-      });
-
-      if (mounted) {
-        _showSuccessPopup(useLocal); // Tampilkan Pop Up Cantik
-      }
+      setState(() => _useLocalLanguage = useLocal);
+      if (mounted) _showSuccessPopup(useLocal);
     } else {
       _showErrorSnackBar("Gagal mengganti bahasa. Silakan coba lagi.");
     }
   }
 
-  // --- LOGIC: DOWNLOAD DICTIONARY ---
   Future<void> _downloadDictionary() async {
     if (_userLanguageCode == null || _userLanguageCode == 'id') return;
 
-    // Tutup dialog konfirmasi jika ada
     Navigator.of(context).pop();
-
     setState(() => _isDownloading = true);
 
     try {
       bool success = await DictionaryService().downloadDictionary(
         _userLanguageCode!,
       );
-      await _loadLanguageSettings(); // Refresh status
+      await _loadLanguageSettings();
 
       if (mounted) {
         if (success) {
-          // Setelah download sukses, langsung aktifkan bahasanya
           _switchLanguage(true);
         } else {
           _showErrorSnackBar("Gagal mengunduh kamus.");
@@ -133,46 +126,148 @@ class _LanguageScreenState extends State<LanguageScreen> {
       if (mounted) setState(() => _isDownloading = false);
     }
   }
+  // === AKHIR LOGIC INTI ===
 
+  // === UI UPDATE: SNACKBAR NEO-BRUTALISM ===
   void _showErrorSnackBar(String msg) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.red));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          msg,
+          style: GoogleFonts.plusJakartaSans(
+            fontWeight: FontWeight.w700,
+            color: kWhite,
+          ),
+        ),
+        backgroundColor: const Color(0xFFFF4C4C),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: kBlack, width: kBorderWidth),
+        ),
+        margin: const EdgeInsets.all(24),
+      ),
+    );
   }
 
-  // --- UI: POP UP DIALOGS ---
-
+  // === UI UPDATE: DIALOGS NEO-BRUTALISM ===
   void _showDownloadConfirmation() {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(
-          "Kamus Belum Tersedia",
-          style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold),
-        ),
-        content: Text(
-          "Anda perlu mengunduh kamus $_userLanguageName terlebih dahulu untuk menggunakannya secara offline.",
-          style: GoogleFonts.plusJakartaSans(),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(
-              "Batal",
-              style: GoogleFonts.plusJakartaSans(color: Colors.grey),
-            ),
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: kWhite,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: kBlack, width: kBorderWidth),
+            boxShadow: const [BoxShadow(color: kBlack, offset: Offset(8, 8))],
           ),
-          ElevatedButton(
-            onPressed: _downloadDictionary,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF009688),
-            ),
-            child: Text(
-              "Download Sekarang",
-              style: GoogleFonts.plusJakartaSans(color: Colors.white),
-            ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFDEB3), // Orange pastel
+                  shape: BoxShape.circle,
+                  border: Border.all(color: kBlack, width: kBorderWidth),
+                  boxShadow: const [
+                    BoxShadow(color: kBlack, offset: Offset(4, 4)),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.cloud_download_rounded,
+                  color: kBlack,
+                  size: 32,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                "Kamus Belum Tersedia",
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900,
+                  color: kBlack,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                "Anda perlu mengunduh kamus $_userLanguageName terlebih dahulu untuk menggunakannya secara offline.",
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: kBlack.withOpacity(0.7),
+                  height: 1.5,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => Navigator.pop(ctx),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        decoration: BoxDecoration(
+                          color: kWhite,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: kBlack,
+                            width: kBorderWidth,
+                          ),
+                          boxShadow: const [
+                            BoxShadow(color: kBlack, offset: Offset(2, 2)),
+                          ],
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          "Batal",
+                          style: GoogleFonts.plusJakartaSans(
+                            fontWeight: FontWeight.w900,
+                            color: kBlack,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: _downloadDictionary,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        decoration: BoxDecoration(
+                          color: kLime,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: kBlack,
+                            width: kBorderWidth,
+                          ),
+                          boxShadow: const [
+                            BoxShadow(color: kBlack, offset: Offset(2, 2)),
+                          ],
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          "Download",
+                          style: GoogleFonts.plusJakartaSans(
+                            fontWeight: FontWeight.w900,
+                            color: kBlack,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -184,24 +279,21 @@ class _LanguageScreenState extends State<LanguageScreen> {
         return Dialog(
           backgroundColor: Colors.transparent,
           insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+          elevation: 0,
           child: TweenAnimationBuilder(
             duration: const Duration(milliseconds: 400),
             tween: Tween<double>(begin: 0.8, end: 1.0),
             curve: Curves.easeOutBack,
-            builder: (context, double val, child) {
-              return Transform.scale(scale: val, child: child);
-            },
+            builder: (context, double val, child) =>
+                Transform.scale(scale: val, child: child),
             child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
+              padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: kWhite,
                 borderRadius: BorderRadius.circular(32),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 20,
-                    offset: const Offset(0, 10),
-                  ),
+                border: Border.all(color: kBlack, width: kBorderWidth),
+                boxShadow: const [
+                  BoxShadow(color: kBlack, offset: Offset(8, 8)),
                 ],
               ),
               child: Column(
@@ -211,23 +303,28 @@ class _LanguageScreenState extends State<LanguageScreen> {
                     width: 80,
                     height: 80,
                     margin: const EdgeInsets.only(bottom: 24),
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFE0F2F1), // Teal Soft
-                      shape: BoxShape.circle,
+                    decoration: BoxDecoration(
+                      color: kLime,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: kBlack, width: kBorderWidth),
+                      boxShadow: const [
+                        BoxShadow(color: kBlack, offset: Offset(4, 4)),
+                      ],
                     ),
                     child: const Icon(
-                      Icons.translate_rounded,
-                      color: Color(0xFF009688),
+                      Icons.task_alt_rounded,
+                      color: kBlack,
                       size: 40,
                     ),
                   ),
                   Text(
-                    "Bahasa Diganti!",
+                    "Bahasa Diubah!",
                     textAlign: TextAlign.center,
                     style: GoogleFonts.plusJakartaSans(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: const Color(0xFF1E293B),
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900,
+                      color: kBlack,
+                      letterSpacing: -0.5,
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -238,29 +335,38 @@ class _LanguageScreenState extends State<LanguageScreen> {
                     textAlign: TextAlign.center,
                     style: GoogleFonts.plusJakartaSans(
                       fontSize: 14,
-                      color: const Color(0xFF64748B),
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF6B6B6B),
                       height: 1.5,
                     ),
                   ),
                   const SizedBox(height: 32),
                   SizedBox(
                     width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF009688),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
+                    child: GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 18),
+                        decoration: BoxDecoration(
+                          color: kPurple,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: kBlack,
+                            width: kBorderWidth,
+                          ),
+                          boxShadow: const [
+                            BoxShadow(color: kBlack, offset: Offset(4, 4)),
+                          ],
                         ),
-                        elevation: 0,
-                      ),
-                      child: Text(
-                        "Oke, Mengerti",
-                        style: GoogleFonts.plusJakartaSans(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 16,
+                        alignment: Alignment.center,
+                        child: Text(
+                          "OKE, MENGERTI",
+                          style: GoogleFonts.plusJakartaSans(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 15,
+                            color: kBlack,
+                            letterSpacing: 0.5,
+                          ),
                         ),
                       ),
                     ),
@@ -274,150 +380,157 @@ class _LanguageScreenState extends State<LanguageScreen> {
     );
   }
 
-  // --- UI BUILD ---
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      appBar: AppBar(
-        title: Text(
-          "Bahasa Aplikasi",
-          style: GoogleFonts.plusJakartaSans(
-            color: const Color(0xFF1E293B),
-            fontWeight: FontWeight.bold,
-            fontSize: 18,
-          ),
-        ),
-        centerTitle: true,
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
-            ),
-            child: const Icon(
-              Icons.arrow_back_rounded,
-              size: 18,
-              color: Color(0xFF1E293B),
+      backgroundColor: const Color(0xFF0F0F17),
+      body: Stack(
+        children: [
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0xFFEAE0FF), Color(0xFFD8C3FF)],
+              ),
             ),
           ),
-          onPressed: () => Navigator.pop(context),
-        ),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(color: const Color(0xFFF1F5F9), height: 1),
-        ),
+          SafeArea(
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 20, 24, 10),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        icon: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: kWhite,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: kBlack,
+                              width: kBorderWidth,
+                            ),
+                            boxShadow: const [
+                              BoxShadow(color: kBlack, offset: Offset(2, 2)),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.arrow_back_rounded,
+                            size: 18,
+                            color: kBlack,
+                          ),
+                        ),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        "Bahasa Aplikasi",
+                        style: GoogleFonts.plusJakartaSans(
+                          color: kBlack,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 20,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: _isDownloading
+                      ? Center(
+                          child: Container(
+                            padding: const EdgeInsets.all(32),
+                            decoration: BoxDecoration(
+                              color: kWhite,
+                              borderRadius: BorderRadius.circular(24),
+                              border: Border.all(
+                                color: kBlack,
+                                width: kBorderWidth,
+                              ),
+                              boxShadow: const [
+                                BoxShadow(color: kBlack, offset: Offset(4, 4)),
+                              ],
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const CircularProgressIndicator(
+                                  color: kBlack,
+                                  strokeWidth: 3,
+                                ),
+                                const SizedBox(height: 24),
+                                Text(
+                                  "Mengunduh Kamus...",
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontWeight: FontWeight.w800,
+                                    color: kBlack,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                      : SingleChildScrollView(
+                          padding: const EdgeInsets.all(24),
+                          physics: const BouncingScrollPhysics(),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildSectionTitle("BAHASA UTAMA"),
+                              _buildLanguageItem(
+                                title: "Bahasa Indonesia",
+                                subtitle: "Default System",
+                                flagWidget: const Text(
+                                  "🇮🇩",
+                                  style: TextStyle(fontSize: 24),
+                                ),
+                                isActive: !_useLocalLanguage,
+                                onTap: () => _switchLanguage(false),
+                              ),
+                              const SizedBox(height: 32),
+
+                              _buildSectionTitle("BAHASA DAERAH (ADAPTIF AI)"),
+                              _buildLanguageItem(
+                                title: _userLanguageName ?? "Bahasa Daerah",
+                                subtitle: _isDictionaryReady
+                                    ? "Siap digunakan"
+                                    : "Perlu diunduh (${_userLanguageCode ?? '-'})",
+                                flagWidget: const Icon(
+                                  Icons.my_location_rounded,
+                                  color: kBlack,
+                                  size: 20,
+                                ),
+                                flagBg: kPurple,
+                                isActive: _useLocalLanguage,
+                                onTap: () => _switchLanguage(true),
+                                showDownloadIcon:
+                                    !_isDictionaryReady &&
+                                    _userLanguageCode != null &&
+                                    _userLanguageCode != 'id',
+                              ),
+                            ],
+                          ),
+                        ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
-      body: _isDownloading
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const CircularProgressIndicator(color: Color(0xFF009688)),
-                  const SizedBox(height: 16),
-                  Text(
-                    "Sedang mengunduh kamus...",
-                    style: GoogleFonts.plusJakartaSans(
-                      color: const Color(0xFF64748B),
-                    ),
-                  ),
-                ],
-              ),
-            )
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // SECTION 1: BAHASA UTAMA
-                  _buildSectionTitle("Bahasa Utama"),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.02),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    padding: const EdgeInsets.all(4),
-                    child: _buildLanguageItem(
-                      title: "Bahasa Indonesia",
-                      subtitle: "Default System",
-                      flagWidget: const Text(
-                        "🇮🇩",
-                        style: TextStyle(fontSize: 24),
-                      ),
-                      isActive: !_useLocalLanguage,
-                      onTap: () => _switchLanguage(false),
-                    ),
-                  ),
-
-                  const SizedBox(height: 24),
-
-                  // SECTION 2: BAHASA DAERAH
-                  _buildSectionTitle("Bahasa Daerah (Adaptif)"),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.02),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    padding: const EdgeInsets.all(4),
-                    child: _buildLanguageItem(
-                      // Gunakan Nama Bahasa yang sudah diformat, default 'Bahasa Daerah' jika null
-                      title: _userLanguageName ?? "Bahasa Daerah",
-                      subtitle: _isDictionaryReady
-                          ? "Siap digunakan"
-                          : "Perlu diunduh (${_userLanguageCode ?? '-'})",
-                      flagWidget: Container(
-                        width: 40,
-                        height: 30,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFE0F2F1),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: const Icon(
-                          Icons.location_on_rounded,
-                          color: Color(0xFF009688),
-                          size: 18,
-                        ),
-                      ),
-                      isActive: _useLocalLanguage,
-                      onTap: () => _switchLanguage(true),
-                      showDownloadIcon:
-                          !_isDictionaryReady &&
-                          _userLanguageCode != null &&
-                          _userLanguageCode != 'id',
-                    ),
-                  ),
-                ],
-              ),
-            ),
     );
   }
 
   Widget _buildSectionTitle(String title) {
     return Padding(
-      padding: const EdgeInsets.only(left: 4, bottom: 12),
+      padding: const EdgeInsets.only(left: 4, bottom: 16),
       child: Text(
-        title.toUpperCase(),
+        title,
         style: GoogleFonts.plusJakartaSans(
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-          color: const Color(0xFF64748B),
+          fontSize: 14,
+          fontWeight: FontWeight.w900,
+          color: kBlack,
           letterSpacing: 0.5,
         ),
       ),
@@ -428,95 +541,80 @@ class _LanguageScreenState extends State<LanguageScreen> {
     required String title,
     required String subtitle,
     required Widget flagWidget,
+    Color flagBg = kWhite,
     required bool isActive,
     required VoidCallback onTap,
     bool showDownloadIcon = false,
   }) {
-    return Material(
-      color: isActive
-          ? const Color(0xFFE0F2F1)
-          : Colors.transparent, // Active BG Color
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: isActive
-              ? BoxDecoration(
-                  border: Border.all(
-                    color: const Color(0xFF009688).withOpacity(0.2),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isActive ? kLime : kWhite,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: kBlack, width: kBorderWidth),
+          boxShadow: const [BoxShadow(color: kBlack, offset: Offset(4, 4))],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 50,
+              height: 42,
+              decoration: BoxDecoration(
+                color: flagBg,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: kBlack, width: 1.5),
+              ),
+              alignment: Alignment.center,
+              child: flagWidget,
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w900,
+                      color: kBlack,
+                    ),
                   ),
-                  borderRadius: BorderRadius.circular(12),
-                )
-              : null,
-          child: Row(
-            children: [
-              // Flag Box
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: kBlack.withOpacity(0.7),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (showDownloadIcon)
               Container(
-                width: 44,
-                height: 36,
-                margin: const EdgeInsets.only(right: 16),
+                padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.grey.shade200),
+                  color: const Color(0xFFFFDEB3), // Orange paste
+                  shape: BoxShape.circle,
+                  border: Border.all(color: kBlack, width: 1.5),
                 ),
-                alignment: Alignment.center,
-                child: flagWidget,
+                child: const Icon(
+                  Icons.download_rounded,
+                  color: kBlack,
+                  size: 20,
+                ),
+              )
+            else
+              Icon(
+                Icons.check_circle_rounded,
+                color: isActive ? kBlack : Colors.transparent,
+                size: 28,
               ),
-
-              // Texts
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 15,
-                        fontWeight: isActive
-                            ? FontWeight.w700
-                            : FontWeight.w600,
-                        color: isActive
-                            ? const Color(0xFF009688)
-                            : const Color(0xFF1E293B),
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 12,
-                        color: const Color(0xFF64748B),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // Icons (Check or Download)
-              if (showDownloadIcon)
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.shade50,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.download_rounded,
-                    color: Colors.orange,
-                    size: 20,
-                  ),
-                )
-              else if (isActive)
-                const Icon(
-                  Icons.check_circle_rounded,
-                  color: Color(0xFF009688),
-                  size: 24,
-                ),
-            ],
-          ),
+          ],
         ),
       ),
     );

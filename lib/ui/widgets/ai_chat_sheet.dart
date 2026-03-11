@@ -1,7 +1,3 @@
-// lib/screens/ai_chat_sheet.dart
-// 🚀 FASE 4: AI Chat Sheet dengan Material Model Integration
-// ✅ FIXED: MaterialModel parameter error resolved
-
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -10,8 +6,15 @@ import 'package:nusalearn/core/services/ai_coordinator.dart';
 import 'package:nusalearn/logic/providers/auth_provider.dart';
 import 'package:nusalearn/models/material_model.dart';
 
+// Gunakan konstanta yang sama di file ini jika terpisah
+const Color _kLime = Color(0xFFD2F945);
+const Color _kPurple = Color.fromARGB(255, 156, 132, 242);
+const Color _kBlack = Color(0xFF000000);
+const Color _kWhite = Color(0xFFFFFFFF);
+const double _kBorderWidth = 1.5;
+
 class AiChatSheet extends StatefulWidget {
-  final MaterialModel material; // ✅ Type-safe dengan MaterialModel
+  final MaterialModel material;
 
   const AiChatSheet({super.key, required this.material});
 
@@ -20,6 +23,7 @@ class AiChatSheet extends StatefulWidget {
 }
 
 class _AiChatSheetState extends State<AiChatSheet> {
+  // === LOGIKA INTI (TIDAK DISENTUH) ===
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   late AICoordinator _aiCoordinator;
@@ -31,23 +35,17 @@ class _AiChatSheetState extends State<AiChatSheet> {
   bool _isListening = false;
   bool _isThinking = false;
   bool _hasText = false;
-  String _currentMode = 'offline'; // 'offline' atau 'online'
+  String _currentMode = 'offline';
 
   @override
   void initState() {
     super.initState();
-
-    // ✅ Initialize AI Coordinator
     _aiCoordinator = AICoordinator();
     _aiCoordinator.init();
 
-    // ✅ Listen to connectivity changes
     _aiCoordinator.onModeChanged = (bool isOnline) {
-      if (mounted) {
-        setState(() {
-          _currentMode = isOnline ? 'online' : 'offline';
-        });
-      }
+      if (mounted)
+        setState(() => _currentMode = isOnline ? 'online' : 'offline');
     };
 
     VoiceService().init();
@@ -55,23 +53,18 @@ class _AiChatSheetState extends State<AiChatSheet> {
       setState(() => _hasText = _textController.text.trim().isNotEmpty);
     });
 
-    // ✅ Check initial AI readiness
     _checkAIReadiness();
   }
 
-  /// Validasi kesiapan data AI
   void _checkAIReadiness() {
     if (widget.material.aiStatus != 'ready') {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           _messages.add({
             'role': 'ai',
-            'text': '''
-⚠️ **Data AI Belum Siap**
-
+            'text': '''⚠️ **Data AI Belum Siap**
 Materi ini sedang diproses. Beberapa fitur AI mungkin terbatas.
-Silakan sync ulang untuk hasil optimal.
-''',
+Silakan sync ulang untuk hasil optimal.''',
           });
           setState(() {});
         }
@@ -89,50 +82,30 @@ Silakan sync ulang untuk hasil optimal.
     super.dispose();
   }
 
-  // ========================================
-  // VOICE INPUT HANDLERS
-  // ========================================
-
   void _startListening() async {
-    print("🎤 User pressed mic button");
     setState(() => _isListening = true);
-
     await VoiceService().startListening(
       onResult: (text) {
-        print("📝 Voice result: $text");
-        if (mounted) {
-          setState(() => _textController.text = text);
-        }
+        if (mounted) setState(() => _textController.text = text);
       },
     );
   }
 
   void _stopListeningAndSend() async {
-    print("🛑 User released mic button");
     setState(() => _isListening = false);
     await VoiceService().stopListening();
-
     if (_textController.text.trim().isNotEmpty) {
       await Future.delayed(const Duration(milliseconds: 500));
       _processQuery(_textController.text);
     }
   }
 
-  // ========================================
-  // TEXT INPUT HANDLER
-  // ========================================
-
   void _handleTextSubmit() {
     if (_textController.text.trim().isEmpty) return;
     _processQuery(_textController.text);
   }
 
-  // ========================================
-  // CORE AI PROCESSING (✅ FIXED)
-  // ========================================
-
   Future<void> _processQuery(String text) async {
-    // 1. UPDATE UI: Tampilkan Chat User
     setState(() {
       _messages.add({'role': 'user', 'text': text});
       _textController.clear();
@@ -142,48 +115,30 @@ Silakan sync ulang untuk hasil optimal.
     _scrollToBottom();
 
     try {
-      // 2. ✅ VALIDASI: Pastikan material tersedia
-      if (widget.material == null) {
-        throw Exception("Material tidak tersedia");
-      }
-
-      // 3. UX DELAY: Simulasi "Berpikir"
+      if (widget.material == null) throw Exception("Material tidak tersedia");
       await Future.delayed(const Duration(milliseconds: 600));
 
-      // 4. ✅ FIX: Panggil AI Coordinator dengan parameter yang benar
-      // AICoordinator.processQuery(String input, MaterialModel material)
       String aiResponse = await _aiCoordinator.processQuery(
-        text, // Parameter 1: String input (query dari user)
-        widget.material, // Parameter 2: MaterialModel (BUKAN String!)
+        text,
+        widget.material,
       );
 
-      // 5. FINAL UPDATE: Tampilkan Jawaban AI
       if (mounted) {
         setState(() {
           _messages.add({'role': 'ai', 'text': aiResponse});
           _isThinking = false;
         });
         _scrollToBottom();
-
-        // 6. ACCESSIBILITY: Text-to-Speech
         VoiceService().speak(aiResponse);
       }
     } catch (e) {
-      // Error Handling
-      print("❌ Error Processing Query: $e");
       if (mounted) {
         setState(() {
           _messages.add({
             'role': 'ai',
-            'text':
-                '''
-❌ **Terjadi Kesalahan**
-
+            'text': '''❌ **Terjadi Kesalahan**
 Maaf, ada kendala saat memproses pertanyaan.
-Silakan coba lagi atau hubungi admin.
-
-Detail: ${e.toString()}
-''',
+Detail: ${e.toString()}''',
           });
           _isThinking = false;
         });
@@ -203,85 +158,89 @@ Detail: ${e.toString()}
       }
     });
   }
-
-  // ========================================
-  // UI BUILD
-  // ========================================
+  // === AKHIR LOGIKA INTI ===
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: MediaQuery.of(context).size.height * 0.80,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      child: Column(
-        children: [
-          _buildHeader(),
-          const Divider(height: 1),
-          Expanded(
-            child: ListView.builder(
-              controller: _scrollController,
-              padding: const EdgeInsets.all(20),
-              itemCount: _messages.length,
-              itemBuilder: (context, index) {
-                final msg = _messages[index];
-                final isUser = msg['role'] == 'user';
-                return _buildMessageBubble(msg, isUser);
-              },
+    // 🔥 ROOT CAUSE DEFENSE: MediaQuery viewInsets untuk menaikkan UI saat keyboard muncul
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: Container(
+        height:
+            MediaQuery.of(context).size.height *
+            0.85, // Memastikan ruang yang luas
+        decoration: BoxDecoration(
+          color: _kWhite,
+          border: Border.all(color: _kBlack, width: 2.0),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          boxShadow: const [BoxShadow(color: _kBlack, offset: Offset(0, -4))],
+        ),
+        child: Column(
+          children: [
+            _buildHeader(),
+            Container(height: 2, color: _kBlack), // Hard divider
+            Expanded(
+              child: ListView.builder(
+                controller: _scrollController,
+                padding: const EdgeInsets.all(20),
+                itemCount: _messages.length,
+                itemBuilder: (context, index) {
+                  final msg = _messages[index];
+                  final isUser = msg['role'] == 'user';
+                  return _buildMessageBubble(msg, isUser);
+                },
+              ),
             ),
-          ),
-          if (_isThinking) _buildThinkingIndicator(),
-          _buildInputBar(),
-        ],
+            if (_isThinking) _buildThinkingIndicator(),
+            _buildInputBar(),
+          ],
+        ),
       ),
     );
   }
 
-  // ========================================
-  // UI COMPONENTS
-  // ========================================
-
   Widget _buildHeader() {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+      decoration: const BoxDecoration(
+        color: Color(0xFFF4F0FF), // Pindahkan color ke dalam sini
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
       child: Column(
         children: [
-          // Handle
           Container(
             width: 40,
-            height: 4,
+            height: 6,
             decoration: BoxDecoration(
-              color: Colors.grey.shade300,
-              borderRadius: BorderRadius.circular(2),
+              color: _kBlack,
+              borderRadius: BorderRadius.circular(4),
             ),
           ),
-          const SizedBox(height: 12),
-
-          // Title with Mode Indicator
+          const SizedBox(height: 16),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                "Asisten Belajar",
-                style: GoogleFonts.poppins(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
+                "Asisten AI",
+                style: GoogleFonts.plusJakartaSans(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 18,
+                  color: _kBlack,
                 ),
               ),
               const SizedBox(width: 8),
               _buildModeIndicator(),
             ],
           ),
-
-          // Material Title
           const SizedBox(height: 4),
           Text(
             widget.material.titleIndo,
-            style: GoogleFonts.poppins(
+            style: GoogleFonts.plusJakartaSans(
               fontSize: 12,
-              color: Colors.grey.shade600,
+              fontWeight: FontWeight.w700,
+              color: _kBlack.withOpacity(0.6),
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -292,38 +251,30 @@ Detail: ${e.toString()}
   }
 
   Widget _buildModeIndicator() {
+    final bool isOnline = _currentMode == 'online';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: _currentMode == 'online'
-            ? Colors.green.shade50
-            : Colors.orange.shade50,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: _currentMode == 'online'
-              ? Colors.green.shade300
-              : Colors.orange.shade300,
-        ),
+        color: isOnline ? _kLime : const Color(0xFFFFDEB3), // Hijau atau Orange
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: _kBlack, width: _kBorderWidth),
+        boxShadow: const [BoxShadow(color: _kBlack, offset: Offset(2, 2))],
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
-            _currentMode == 'online' ? Icons.cloud_done : Icons.offline_bolt,
+            isOnline ? Icons.cloud_done_rounded : Icons.offline_bolt_rounded,
             size: 12,
-            color: _currentMode == 'online'
-                ? Colors.green.shade700
-                : Colors.orange.shade700,
+            color: _kBlack,
           ),
           const SizedBox(width: 4),
           Text(
-            _currentMode == 'online' ? 'Online' : 'Offline',
-            style: GoogleFonts.poppins(
+            isOnline ? 'Online' : 'Offline',
+            style: GoogleFonts.plusJakartaSans(
               fontSize: 10,
-              fontWeight: FontWeight.w600,
-              color: _currentMode == 'online'
-                  ? Colors.green.shade700
-                  : Colors.orange.shade700,
+              fontWeight: FontWeight.w900,
+              color: _kBlack,
             ),
           ),
         ],
@@ -335,25 +286,33 @@ Detail: ${e.toString()}
     return Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(12),
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(14),
         constraints: BoxConstraints(
           maxWidth: MediaQuery.of(context).size.width * 0.75,
         ),
         decoration: BoxDecoration(
-          color: isUser ? Colors.teal : Colors.grey.shade100,
+          color: isUser ? _kLime : _kWhite,
+          border: Border.all(color: _kBlack, width: _kBorderWidth),
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(16),
             topRight: const Radius.circular(16),
-            bottomLeft: isUser ? const Radius.circular(16) : Radius.zero,
-            bottomRight: isUser ? Radius.zero : const Radius.circular(16),
+            bottomLeft: isUser
+                ? const Radius.circular(16)
+                : const Radius.circular(4),
+            bottomRight: isUser
+                ? const Radius.circular(4)
+                : const Radius.circular(16),
           ),
+          boxShadow: const [BoxShadow(color: _kBlack, offset: Offset(3, 3))],
         ),
         child: Text(
           msg['text']!,
-          style: GoogleFonts.poppins(
-            color: isUser ? Colors.white : Colors.black87,
+          style: GoogleFonts.plusJakartaSans(
+            color: _kBlack,
             fontSize: 14,
+            fontWeight: FontWeight.w600,
+            height: 1.4,
           ),
         ),
       ),
@@ -362,23 +321,32 @@ Detail: ${e.toString()}
 
   Widget _buildThinkingIndicator() {
     return Padding(
-      padding: const EdgeInsets.only(left: 20, bottom: 10),
+      padding: const EdgeInsets.only(left: 20, bottom: 16),
       child: Align(
         alignment: Alignment.centerLeft,
         child: Row(
           children: [
-            SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(
+            Container(
+              width: 20,
+              height: 20,
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: _kBlack, width: 1.5),
+              ),
+              child: const CircularProgressIndicator(
                 strokeWidth: 2,
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.teal),
+                valueColor: AlwaysStoppedAnimation<Color>(_kBlack),
               ),
             ),
             const SizedBox(width: 8),
             Text(
-              "Sedang berpikir...",
-              style: GoogleFonts.poppins(color: Colors.grey, fontSize: 12),
+              "AI sedang menganalisis...",
+              style: GoogleFonts.plusJakartaSans(
+                color: _kBlack.withOpacity(0.6),
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ],
         ),
@@ -388,67 +356,92 @@ Detail: ${e.toString()}
 
   Widget _buildInputBar() {
     return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 10,
-            offset: const Offset(0, -5),
-          ),
-        ],
+      padding: const EdgeInsets.all(16),
+      decoration: const BoxDecoration(
+        color: _kWhite,
+        border: Border(top: BorderSide(color: _kBlack, width: 2.0)),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           Expanded(
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(30),
+                color: _kWhite,
+                border: Border.all(color: _kBlack, width: _kBorderWidth),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: const [
+                  BoxShadow(color: _kBlack, offset: Offset(3, 3)),
+                ],
               ),
               child: TextField(
                 controller: _textController,
+                minLines: 1,
+                maxLines: 4, // 🔥 TextField bisa membesar
+                keyboardType: TextInputType.multiline, // 🔥 Fitur WhatsApp
+                textInputAction:
+                    TextInputAction.newline, // 🔥 Enter membuat baris baru
+                style: GoogleFonts.plusJakartaSans(
+                  fontWeight: FontWeight.w600,
+                  color: _kBlack,
+                ),
                 decoration: InputDecoration(
                   hintText: _isListening
                       ? "Mendengarkan..."
                       : "Ketik pertanyaan...",
-                  hintStyle: TextStyle(
-                    color: _isListening ? Colors.red : Colors.grey,
+                  hintStyle: GoogleFonts.plusJakartaSans(
+                    color: _isListening ? Colors.red : _kBlack.withOpacity(0.5),
+                    fontWeight: FontWeight.w700,
                   ),
                   border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 14),
                 ),
-                onSubmitted: (val) => _handleTextSubmit(),
               ),
             ),
           ),
           const SizedBox(width: 12),
 
-          // TOMBOL GANDA (KIRIM / MIC)
+          // TOMBOL KIRIM / MIC DENGAN NEO-BRUTALISM
           _hasText
               ? GestureDetector(
                   onTap: _handleTextSubmit,
-                  child: CircleAvatar(
-                    radius: 24,
-                    backgroundColor: Colors.teal,
+                  child: Container(
+                    height: 52,
+                    width: 52,
+                    decoration: BoxDecoration(
+                      color: _kLime,
+                      border: Border.all(color: _kBlack, width: _kBorderWidth),
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: const [
+                        BoxShadow(color: _kBlack, offset: Offset(3, 3)),
+                      ],
+                    ),
                     child: const Icon(
                       Icons.send_rounded,
-                      color: Colors.white,
-                      size: 20,
+                      color: _kBlack,
+                      size: 24,
                     ),
                   ),
                 )
               : GestureDetector(
                   onLongPress: _startListening,
                   onLongPressUp: _stopListeningAndSend,
-                  child: CircleAvatar(
-                    radius: 24,
-                    backgroundColor: _isListening ? Colors.red : Colors.teal,
+                  child: Container(
+                    height: 52,
+                    width: 52,
+                    decoration: BoxDecoration(
+                      color: _isListening ? const Color(0xFFFFB3D9) : _kPurple,
+                      border: Border.all(color: _kBlack, width: _kBorderWidth),
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: const [
+                        BoxShadow(color: _kBlack, offset: Offset(3, 3)),
+                      ],
+                    ),
                     child: Icon(
                       _isListening ? Icons.mic : Icons.mic_none_rounded,
-                      color: Colors.white,
-                      size: 24,
+                      color: _kBlack,
+                      size: 26,
                     ),
                   ),
                 ),
