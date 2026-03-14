@@ -417,4 +417,58 @@ class SyncService {
       return null;
     }
   }
+
+  Future<void> performGlobalSync() async {
+    print('📡 Mencoba sinkronisasi background...');
+
+    // 1. Sinkronisasi Foto Profil
+    await syncPendingProfile();
+
+    // 2. Sinkronisasi Progress Belajar
+    await syncUpProgress();
+
+    print('✅ Sinkronisasi background selesai.');
+  }
+
+  Future<void> syncPendingProfile() async {
+    final db = await DatabaseHelper.instance.database;
+    final List<Map<String, dynamic>> users = await db.query('users', limit: 1);
+
+    if (users.isEmpty || users.first['is_synced'] == 1) return;
+
+    final user = users.first;
+    final String? localPath = user['local_image_path'] as String?;
+
+    if (localPath != null && await File(localPath).exists()) {
+      try {
+        FormData formData = FormData.fromMap({
+          'image': await MultipartFile.fromFile(
+            localPath,
+            filename: p.basename(localPath),
+          ),
+        });
+
+        // Pastikan endpoint Laravel Anda sudah benar
+        final response = await _dio.post('/update-profile', data: formData);
+
+        if (response.data['status'] == 'success') {
+          String serverUrl = response.data['data']['image_url'];
+
+          await db.update(
+            'users',
+            {
+              'image_url': serverUrl,
+              'is_synced': 1, // BERHASIL: Tandai bersih
+            },
+            where: 'id = ?',
+            whereArgs: [user['id']],
+          );
+        }
+      } catch (e) {
+        print(
+          "☁️ Background Sync Profil: Koneksi lambat/offline. Akan dicoba lagi nanti.",
+        );
+      }
+    }
+  }
 }

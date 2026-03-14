@@ -2,10 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart'; // Pastikan package ini ada di pubspec.yaml
 
+// --- KONSTANTA NEO-BRUTALISM ---
+const Color kLime = Color(0xFFD2F945);
+const Color kPurple = Color.fromARGB(255, 156, 132, 242);
+const Color kBlack = Color(0xFF000000);
+const Color kWhite = Color(0xFFFFFFFF);
+const double kBorderWidth = 2.0;
+
 class HelpCenterScreen extends StatelessWidget {
   const HelpCenterScreen({super.key});
 
-  // --- LOGIC: URL LAUNCHER ---
+  // === LOGIC: URL LAUNCHER (TIDAK DISENTUH) ===
   Future<void> _launchUrl(String urlString) async {
     final Uri url = Uri.parse(urlString);
     if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
@@ -31,191 +38,278 @@ class HelpCenterScreen extends StatelessWidget {
     );
     _launchUrl(emailLaunchUri.toString());
   }
+  // === AKHIR LOGIC ===
 
-  // --- UI BUILD ---
+  // === UI BUILD ===
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      appBar: AppBar(
-        title: Text(
-          "Pusat Bantuan",
-          style: GoogleFonts.plusJakartaSans(
-            color: const Color(0xFF1E293B),
-            fontWeight: FontWeight.bold,
-            fontSize: 18,
-          ),
-        ),
-        centerTitle: true,
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
-            ),
-            child: const Icon(
-              Icons.arrow_back_rounded,
-              size: 18,
-              color: Color(0xFF1E293B),
+      backgroundColor: const Color(0xFF0F0F17),
+      body: Stack(
+        children: [
+          // Background Gradient Neo-Brutalism
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0xFFEAE0FF), Color(0xFFD8C3FF)],
+              ),
             ),
           ),
-          onPressed: () => Navigator.pop(context),
-        ),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(color: const Color(0xFFF1F5F9), height: 1),
-        ),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        physics: const BouncingScrollPhysics(),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // 1. FAQ SECTION (Langsung masuk ke sini)
-            Text(
-              "Sering Ditanyakan",
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: const Color(0xFF1E293B),
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            _buildFaqItem(
-              "Bagaimana cara menaikkan level?",
-              "Kamu bisa mendapatkan XP dengan menyelesaikan kuis dan materi pelajaran. Semakin tinggi nilaimu, semakin cepat levelmu naik!",
-            ),
-            _buildFaqItem(
-              "Apakah aplikasi bisa offline?",
-              "Tentu saja! Materi dan kuis yang sudah kamu download (ikon awan) bisa dibuka kapan saja tanpa kuota internet.",
-            ),
-            _buildFaqItem(
-              "Lupa kata sandi akun",
-              "Jika kamu lupa sandi, silakan hubungi admin melalui WhatsApp atau Email di bawah ini untuk reset password.",
-            ),
-            _buildFaqItem(
-              "Bagaimana mengganti bahasa?",
-              "Masuk ke menu Profil > Bahasa Aplikasi. Kamu bisa memilih Bahasa Indonesia atau Bahasa Daerah yang tersedia.",
-            ),
-
-            const SizedBox(height: 32),
-
-            // 2. CONTACT SUPPORT BOX
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.03),
-                    blurRadius: 20,
-                    offset: const Offset(0, 5),
-                  ),
-                ],
-              ),
-              child: Column(
-                children: [
-                  Text(
-                    "Masih butuh bantuan?",
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFF1E293B),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    "Tim support NusaLearn siap membantumu 24/7.",
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 12,
-                      color: const Color(0xFF64748B),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // WhatsApp Button
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: _contactWhatsApp,
-                      icon: const Icon(Icons.chat_bubble_rounded, size: 20),
-                      label: Text(
-                        "Chat WhatsApp",
+          SafeArea(
+            child: Column(
+              children: [
+                // Custom App Bar Neo-Brutalism
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 20, 24, 10),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        icon: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: kWhite,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: kBlack,
+                              width: kBorderWidth,
+                            ),
+                            boxShadow: const [
+                              BoxShadow(color: kBlack, offset: Offset(2, 2)),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.arrow_back_rounded,
+                            size: 18,
+                            color: kBlack,
+                          ),
+                        ),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        "Pusat Bantuan",
                         style: GoogleFonts.plusJakartaSans(
-                          fontWeight: FontWeight.bold,
+                          color: kBlack,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 20,
+                          letterSpacing: -0.5,
                         ),
                       ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF25D366), // WA Green
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
+                    ],
+                  ),
+                ),
+
+                // Body Content
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(24),
+                    physics: const BouncingScrollPhysics(),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // 1. FAQ SECTION
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: kLime,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: kBlack,
+                              width: kBorderWidth,
+                            ),
+                          ),
+                          child: Text(
+                            "SERING DITANYAKAN",
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w900,
+                              color: kBlack,
+                              letterSpacing: 1.0,
+                            ),
+                          ),
                         ),
-                        elevation: 2,
-                        shadowColor: const Color(0xFF25D366).withOpacity(0.4),
-                      ),
+                        const SizedBox(height: 16),
+
+                        _buildFaqItem(
+                          "Bagaimana cara menaikkan level?",
+                          "Kamu bisa mendapatkan XP dengan menyelesaikan kuis dan materi pelajaran. Semakin tinggi nilaimu, semakin cepat levelmu naik!",
+                        ),
+                        _buildFaqItem(
+                          "Apakah aplikasi bisa offline?",
+                          "Tentu saja! Materi dan kuis yang sudah kamu download (ikon awan) bisa dibuka kapan saja tanpa kuota internet.",
+                        ),
+                        _buildFaqItem(
+                          "Lupa kata sandi akun",
+                          "Jika kamu lupa sandi, silakan hubungi admin melalui WhatsApp atau Email di bawah ini untuk reset password.",
+                        ),
+                        _buildFaqItem(
+                          "Bagaimana mengganti bahasa?",
+                          "Masuk ke menu Profil > Bahasa Aplikasi. Kamu bisa memilih Bahasa Indonesia atau Bahasa Daerah yang tersedia.",
+                        ),
+
+                        const SizedBox(height: 40),
+
+                        // 2. CONTACT SUPPORT BOX (Neo-Brutalism)
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(24),
+                          decoration: BoxDecoration(
+                            color: kWhite,
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(
+                              color: kBlack,
+                              width: kBorderWidth,
+                            ),
+                            boxShadow: const [
+                              BoxShadow(color: kBlack, offset: Offset(8, 8)),
+                            ],
+                          ),
+                          child: Column(
+                            children: [
+                              Text(
+                                "MASIH BUTUH BANTUAN?",
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w900,
+                                  color: kBlack,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                "Tim support NusaLearn siap membantumu 24/7. Jangan ragu untuk menghubungi kami.",
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: kBlack.withOpacity(0.7),
+                                  height: 1.5,
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+
+                              // WhatsApp Button Custom
+                              GestureDetector(
+                                onTap: _contactWhatsApp,
+                                child: Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 16,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF25D366), // WA Green
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(
+                                      color: kBlack,
+                                      width: kBorderWidth,
+                                    ),
+                                    boxShadow: const [
+                                      BoxShadow(
+                                        color: kBlack,
+                                        offset: Offset(4, 4),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      const Icon(
+                                        Icons.chat_bubble_rounded,
+                                        color: kBlack,
+                                        size: 20,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        "CHAT WHATSAPP",
+                                        style: GoogleFonts.plusJakartaSans(
+                                          fontWeight: FontWeight.w900,
+                                          fontSize: 14,
+                                          color: kBlack,
+                                          letterSpacing: 0.5,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+
+                              const SizedBox(height: 16),
+
+                              // Email Button Custom
+                              GestureDetector(
+                                onTap: _contactEmail,
+                                child: Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 16,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: kWhite,
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(
+                                      color: kBlack,
+                                      width: kBorderWidth,
+                                    ),
+                                    boxShadow: const [
+                                      BoxShadow(
+                                        color: kBlack,
+                                        offset: Offset(4, 4),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      const Icon(
+                                        Icons.email_rounded,
+                                        color: Color(0xFFEA4335), // Red Gmail
+                                        size: 20,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        "NusaLearn@gmail.com",
+                                        style: GoogleFonts.plusJakartaSans(
+                                          fontWeight: FontWeight.w900,
+                                          fontSize: 14,
+                                          color: kBlack,
+                                          letterSpacing: 0.5,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 40),
+                      ],
                     ),
                   ),
-
-                  const SizedBox(height: 12),
-
-                  // Email Button
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: _contactEmail,
-                      icon: const Icon(
-                        Icons.email_rounded,
-                        size: 20,
-                        color: Color(0xFFEA4335),
-                      ), // Gmail Red
-                      label: Text(
-                        "NusaLearn@gmail.com",
-                        style: GoogleFonts.plusJakartaSans(
-                          fontWeight: FontWeight.bold,
-                          color: const Color(0xFF1E293B),
-                        ),
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        backgroundColor: const Color(0xFFF8FAFC),
-                        side: const BorderSide(color: Color(0xFFE2E8F0)),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
-
-            const SizedBox(height: 40),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
-  // --- HELPER WIDGET ---
+  // --- HELPER WIDGET NEO-BRUTALISM ---
   Widget _buildFaqItem(String question, String answer) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: kWhite,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFF1F5F9)),
+        border: Border.all(color: kBlack, width: kBorderWidth),
+        boxShadow: const [BoxShadow(color: kBlack, offset: Offset(4, 4))],
       ),
-      // Menggunakan Builder agar context tersedia untuk Theme
       child: Builder(
         builder: (context) {
           return Theme(
@@ -231,21 +325,28 @@ class HelpCenterScreen extends StatelessWidget {
                 question,
                 style: GoogleFonts.plusJakartaSans(
                   fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: const Color(0xFF1E293B),
+                  fontWeight: FontWeight.w800,
+                  color: kBlack,
                 ),
               ),
-              collapsedIconColor: const Color(
-                0xFF94A3B8,
-              ), // Abu-abu saat tertutup
-              iconColor: const Color(0xFF009688), // Teal saat terbuka
+              collapsedIconColor: kBlack,
+              iconColor: kPurple, // Warna saat ekspansi terbuka
               children: [
-                Text(
-                  answer,
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 13,
-                    color: const Color(0xFF64748B),
-                    height: 1.5,
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: kBlack.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: kBlack.withOpacity(0.1)),
+                  ),
+                  child: Text(
+                    answer,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: kBlack.withOpacity(0.8),
+                      height: 1.5,
+                    ),
                   ),
                 ),
               ],

@@ -19,7 +19,23 @@ class DatabaseHelper {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, filePath);
 
-    return await openDatabase(path, version: 1, onCreate: _createDB);
+    return await openDatabase(
+      path,
+      version: 2,
+      onCreate: _createDB,
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          // Tambah kolom baru secara aman (Backward Compatible)
+          await db.execute('ALTER TABLE users ADD COLUMN image_url TEXT');
+          await db.execute(
+            'ALTER TABLE users ADD COLUMN local_image_path TEXT',
+          );
+          await db.execute(
+            'ALTER TABLE users ADD COLUMN is_synced INTEGER DEFAULT 1',
+          );
+        }
+      },
+    );
   }
 
   Future _createDB(Database db, int version) async {

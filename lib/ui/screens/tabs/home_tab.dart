@@ -10,6 +10,7 @@ import 'package:nusalearn/core/services/dictionary_service.dart';
 import 'package:nusalearn/core/services/adaptive_service.dart';
 import 'package:nusalearn/logic/providers/auth_provider.dart';
 import 'package:nusalearn/ui/screens/materi_detail_screen.dart';
+import 'package:nusalearn/core/services/sync_service.dart';
 
 // Konstanta Warna Neo-Brutalism
 const Color kLime = Color(0xFFD2F945);
@@ -32,6 +33,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
   int _totalRead = 0;
   int _quizCorrect = 0;
   int _currentLevel = 1;
+  double _xpProgress = 0.0;
   List<Map<String, dynamic>> _recentMaterials = [];
   bool _isLoading = true;
 
@@ -51,6 +53,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
       vsync: this,
       duration: const Duration(seconds: 2),
     )..repeat();
+    SyncService().performGlobalSync();
   }
 
   @override
@@ -64,12 +67,34 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     final prefs = await SharedPreferences.getInstance();
     final db = await DatabaseHelper.instance.database;
 
+    // Nilai awal dari cache
     String name = prefs.getString('user_name') ?? "Siswa";
     String school = prefs.getString('user_school') ?? "-";
 
     int userId = 0;
+
+    // FETCH SINGLE ROW DARI SQLITE (O(1))
     final userResult = await db.query('users', limit: 1);
-    if (userResult.isNotEmpty) userId = userResult.first['id'] as int;
+
+    if (userResult.isNotEmpty) {
+      final userData = userResult.first;
+      userId = userData['id'] as int;
+
+      // 1. DEFENSIVE OVERRIDE: Prioritaskan data SQLite (school_origin)
+      final dbSchool = userData['school_origin'] as String?;
+      if (dbSchool != null && dbSchool.trim().isNotEmpty && dbSchool != "-") {
+        school = dbSchool;
+        // Sinkronisasi otomatis ke cache
+        await prefs.setString('user_school', school);
+      }
+
+      // 2. DEFENSIVE OVERRIDE: Sinkronkan juga nama jika perlu
+      final dbName = userData['name'] as String?;
+      if (dbName != null && dbName.trim().isNotEmpty) {
+        name = dbName;
+        await prefs.setString('user_name', name);
+      }
+    }
 
     int level = await AdaptiveService().calculateStudentLevel(userId);
     final countRead = await db.rawQuery(
@@ -97,9 +122,15 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
       setState(() {
         _userName = name;
         _school = school;
-        _currentLevel = level;
+
         _totalRead = Sqflite.firstIntValue(countRead) ?? 0;
         _quizCorrect = Sqflite.firstIntValue(countQuiz) ?? 0;
+
+        // INJEKSI MATEMATIKA: 5 Jawaban Benar = 1 Level
+        _currentLevel = 1 + (_quizCorrect ~/ 5); // Pembagian integer (O(1))
+        _xpProgress =
+            (_quizCorrect % 5) / 5.0; // Kalkulasi persentase bar (0.0 - 0.8)
+
         _recentMaterials = recents;
         Future.delayed(const Duration(milliseconds: 600), () {
           if (mounted) setState(() => _isLoading = false);
@@ -590,7 +621,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
                     ),
                     alignment: Alignment.centerLeft,
                     child: FractionallySizedBox(
-                      widthFactor: (_currentLevel * 0.3).clamp(0.0, 1.0),
+                      widthFactor: _xpProgress,
                       child: Container(
                         decoration: BoxDecoration(
                           color: kLime,

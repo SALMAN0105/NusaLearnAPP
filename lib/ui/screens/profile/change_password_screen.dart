@@ -4,6 +4,13 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:nusalearn/core/api/api_client.dart';
 import 'package:nusalearn/ui/screens/login_screen.dart'; // Import Login Screen
 
+// --- KONSTANTA NEO-BRUTALISM ---
+const Color kLime = Color(0xFFD2F945);
+const Color kPurple = Color.fromARGB(255, 156, 132, 242);
+const Color kBlack = Color(0xFF000000);
+const Color kWhite = Color(0xFFFFFFFF);
+const double kBorderWidth = 2.0;
+
 class ChangePasswordScreen extends StatefulWidget {
   const ChangePasswordScreen({super.key});
 
@@ -35,7 +42,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
     super.dispose();
   }
 
-  // --- LOGIC API GANTI PASSWORD ---
+  // === LOGIC API GANTI PASSWORD (TIDAK DISENTUH) ===
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -77,25 +84,39 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
       if (mounted) setState(() => _isLoading = false);
     }
   }
+  // === AKHIR LOGIC ===
 
+  // === UI UPDATE: SNACKBAR NEO-BRUTALISM ===
   void _showErrorSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
           children: [
-            const Icon(Icons.error_outline_rounded, color: Colors.white),
+            const Icon(Icons.error_rounded, color: kWhite, size: 24),
             const SizedBox(width: 12),
-            Expanded(child: Text(message)),
+            Expanded(
+              child: Text(
+                message,
+                style: GoogleFonts.plusJakartaSans(
+                  fontWeight: FontWeight.w700,
+                  color: kWhite,
+                ),
+              ),
+            ),
           ],
         ),
-        backgroundColor: const Color(0xFFEF4444), // Red Error
+        backgroundColor: const Color(0xFFFF4C4C),
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: kBlack, width: kBorderWidth),
+        ),
+        margin: const EdgeInsets.all(24),
       ),
     );
   }
 
+  // === UI UPDATE: DIALOG SUCCESS NEO-BRUTALISM ===
   void _showSuccessDialog() {
     showDialog(
       context: context,
@@ -106,6 +127,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
           child: Dialog(
             backgroundColor: Colors.transparent,
             insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+            elevation: 0,
             child: TweenAnimationBuilder(
               duration: const Duration(milliseconds: 400),
               tween: Tween<double>(begin: 0.8, end: 1.0),
@@ -115,18 +137,15 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
               },
               child: Container(
                 padding: const EdgeInsets.symmetric(
-                  vertical: 32,
+                  vertical: 40,
                   horizontal: 24,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: kWhite,
                   borderRadius: BorderRadius.circular(32),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 20,
-                      offset: const Offset(0, 10),
-                    ),
+                  border: Border.all(color: kBlack, width: kBorderWidth),
+                  boxShadow: const [
+                    BoxShadow(color: kBlack, offset: Offset(8, 8)),
                   ],
                 ),
                 child: Column(
@@ -136,13 +155,17 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                       width: 80,
                       height: 80,
                       margin: const EdgeInsets.only(bottom: 24),
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFE0F2F1), // Teal Soft
+                      decoration: BoxDecoration(
+                        color: kLime,
                         shape: BoxShape.circle,
+                        border: Border.all(color: kBlack, width: kBorderWidth),
+                        boxShadow: const [
+                          BoxShadow(color: kBlack, offset: Offset(4, 4)),
+                        ],
                       ),
                       child: const Icon(
                         Icons.lock_reset_rounded,
-                        color: Color(0xFF009688),
+                        color: kBlack,
                         size: 40,
                       ),
                     ),
@@ -150,9 +173,10 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                       "Sandi Berhasil Diganti!",
                       textAlign: TextAlign.center,
                       style: GoogleFonts.plusJakartaSans(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        color: const Color(0xFF1E293B),
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900,
+                        color: kBlack,
+                        letterSpacing: -0.5,
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -161,16 +185,17 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                       textAlign: TextAlign.center,
                       style: GoogleFonts.plusJakartaSans(
                         fontSize: 14,
-                        color: const Color(0xFF64748B),
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF6B6B6B),
                         height: 1.5,
                       ),
                     ),
                     const SizedBox(height: 32),
                     SizedBox(
                       width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          // Navigate ke Login Screen dan hapus semua rute sebelumnya
+                      child: GestureDetector(
+                        onTap: () {
+                          // Logika navigasi tidak diubah
                           Navigator.pushAndRemoveUntil(
                             context,
                             MaterialPageRoute(
@@ -179,21 +204,28 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                             (route) => false,
                           );
                         },
-                        icon: const Icon(Icons.login_rounded, size: 20),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF009688),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 18),
+                          decoration: BoxDecoration(
+                            color: kPurple,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: kBlack,
+                              width: kBorderWidth,
+                            ),
+                            boxShadow: const [
+                              BoxShadow(color: kBlack, offset: Offset(4, 4)),
+                            ],
                           ),
-                          elevation: 0,
-                        ),
-                        label: Text(
-                          "Login Ulang",
-                          style: GoogleFonts.plusJakartaSans(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 16,
+                          alignment: Alignment.center,
+                          child: Text(
+                            "LOGIN ULANG",
+                            style: GoogleFonts.plusJakartaSans(
+                              fontWeight: FontWeight.w900,
+                              fontSize: 15,
+                              color: kBlack,
+                              letterSpacing: 0.5,
+                            ),
                           ),
                         ),
                       ),
@@ -208,162 +240,220 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
     );
   }
 
-  // --- UI BUILD ---
+  // === UI BUILD ===
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC), // Background abu-abu muda
-      appBar: AppBar(
-        title: Text(
-          "Ganti Kata Sandi",
-          style: GoogleFonts.plusJakartaSans(
-            color: const Color(0xFF1E293B),
-            fontWeight: FontWeight.bold,
-            fontSize: 18,
-          ),
-        ),
-        centerTitle: true,
-        backgroundColor: Colors.white,
-        elevation: 0,
-        scrolledUnderElevation: 0, // Mencegah perubahan warna saat scroll
-        leading: IconButton(
-          icon: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
-            ),
-            child: const Icon(
-              Icons.arrow_back_rounded,
-              size: 18,
-              color: Color(0xFF1E293B),
+      backgroundColor: const Color(0xFF0F0F17),
+      body: Stack(
+        children: [
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0xFFEAE0FF), Color(0xFFD8C3FF)],
+              ),
             ),
           ),
-          onPressed: () => Navigator.pop(context),
-        ),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(color: const Color(0xFFF1F5F9), height: 1),
-        ),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        physics: const BouncingScrollPhysics(),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Helper Text (Info Box)
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE0F2F1).withOpacity(0.5),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFB2DFDB)),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(
-                      Icons.info_outline_rounded,
-                      color: Color(0xFF009688),
-                      size: 20,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        "Gunakan minimal 8 karakter dengan kombinasi huruf dan angka agar akunmu lebih aman.",
+          SafeArea(
+            child: Column(
+              children: [
+                // Custom App Bar Neo-Brutalism
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 20, 24, 10),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        icon: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: kWhite,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: kBlack,
+                              width: kBorderWidth,
+                            ),
+                            boxShadow: const [
+                              BoxShadow(color: kBlack, offset: Offset(2, 2)),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.arrow_back_rounded,
+                            size: 18,
+                            color: kBlack,
+                          ),
+                        ),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        "Ganti Kata Sandi",
                         style: GoogleFonts.plusJakartaSans(
-                          fontSize: 13,
-                          color: const Color(0xFF00796B),
-                          height: 1.5,
+                          color: kBlack,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 20,
+                          letterSpacing: -0.5,
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 32),
-
-              _buildPasswordField(
-                controller: _oldPassController,
-                label: "Kata Sandi Lama",
-                hint: "Masukkan sandi saat ini",
-                obscureText: _obscureOld,
-                onToggleVisibility: () =>
-                    setState(() => _obscureOld = !_obscureOld),
-              ),
-
-              const SizedBox(height: 20),
-
-              _buildPasswordField(
-                controller: _newPassController,
-                label: "Kata Sandi Baru",
-                hint: "Buat sandi baru yang kuat",
-                obscureText: _obscureNew,
-                onToggleVisibility: () =>
-                    setState(() => _obscureNew = !_obscureNew),
-              ),
-
-              const SizedBox(height: 20),
-
-              _buildPasswordField(
-                controller: _confirmPassController,
-                label: "Konfirmasi Sandi Baru",
-                hint: "Ulangi sandi baru",
-                obscureText: _obscureConfirm,
-                onToggleVisibility: () =>
-                    setState(() => _obscureConfirm = !_obscureConfirm),
-                validator: (val) {
-                  if (val == null || val.isEmpty) return "Tidak boleh kosong";
-                  if (val != _newPassController.text)
-                    return "Sandi tidak cocok";
-                  return null;
-                },
-              ),
-
-              const SizedBox(height: 40),
-
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : _submit,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF009688),
-                    disabledBackgroundColor: const Color(
-                      0xFFB2DFDB,
-                    ), // Warna saat loading
-                    padding: const EdgeInsets.symmetric(vertical: 18),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    elevation: _isLoading ? 0 : 4,
-                    shadowColor: const Color(0xFF009688).withOpacity(0.4),
+                    ],
                   ),
-                  child: _isLoading
-                      ? const SizedBox(
-                          height: 24,
-                          width: 24,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2.5,
-                          ),
-                        )
-                      : Text(
-                          "Update Password",
-                          style: GoogleFonts.plusJakartaSans(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
                 ),
-              ),
-            ],
+
+                // Form Body
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(24),
+                    physics: const BouncingScrollPhysics(),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Helper Text (Info Box Neo-Brutalism)
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: kWhite,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: kBlack,
+                                width: kBorderWidth,
+                              ),
+                              boxShadow: const [
+                                BoxShadow(color: kBlack, offset: Offset(4, 4)),
+                              ],
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Icon(
+                                  Icons.info_outline_rounded,
+                                  color: kBlack,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    "Gunakan minimal 8 karakter dengan kombinasi huruf dan angka agar akunmu lebih aman.",
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontSize: 13,
+                                      color: kBlack,
+                                      fontWeight: FontWeight.w600,
+                                      height: 1.5,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          const SizedBox(height: 32),
+
+                          _buildPasswordField(
+                            controller: _oldPassController,
+                            label: "KATA SANDI LAMA",
+                            hint: "Masukkan sandi saat ini",
+                            obscureText: _obscureOld,
+                            onToggleVisibility: () =>
+                                setState(() => _obscureOld = !_obscureOld),
+                          ),
+
+                          _buildPasswordField(
+                            controller: _newPassController,
+                            label: "KATA SANDI BARU",
+                            hint: "Buat sandi baru yang kuat",
+                            obscureText: _obscureNew,
+                            onToggleVisibility: () =>
+                                setState(() => _obscureNew = !_obscureNew),
+                          ),
+
+                          _buildPasswordField(
+                            controller: _confirmPassController,
+                            label: "KONFIRMASI SANDI BARU",
+                            hint: "Ulangi sandi baru",
+                            obscureText: _obscureConfirm,
+                            onToggleVisibility: () => setState(
+                              () => _obscureConfirm = !_obscureConfirm,
+                            ),
+                            validator: (val) {
+                              if (val == null || val.isEmpty) {
+                                return "Tidak boleh kosong";
+                              }
+                              if (val != _newPassController.text) {
+                                return "Sandi tidak cocok";
+                              }
+                              return null;
+                            },
+                          ),
+
+                          const SizedBox(height: 20),
+
+                          // Submit Button Neo-Brutalism
+                          GestureDetector(
+                            onTap: _isLoading ? null : _submit,
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(vertical: 18),
+                              decoration: BoxDecoration(
+                                color: _isLoading ? kWhite : kLime,
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: kBlack,
+                                  width: kBorderWidth,
+                                ),
+                                boxShadow: _isLoading
+                                    ? [] // Hilangkan shadow saat disable/loading
+                                    : const [
+                                        BoxShadow(
+                                          color: kBlack,
+                                          offset: Offset(4, 4),
+                                        ),
+                                      ],
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  if (_isLoading)
+                                    const SizedBox(
+                                      height: 20,
+                                      width: 20,
+                                      child: CircularProgressIndicator(
+                                        color: kBlack,
+                                        strokeWidth: 2.5,
+                                      ),
+                                    )
+                                  else ...[
+                                    const Icon(
+                                      Icons.lock_rounded,
+                                      color: kBlack,
+                                      size: 24,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      "UPDATE PASSWORD",
+                                      style: GoogleFonts.plusJakartaSans(
+                                        color: kBlack,
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 15,
+                                        letterSpacing: 0.5,
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 40), // Ruang ekstra di bawah
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -377,76 +467,83 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
     required VoidCallback onToggleVisibility,
     String? Function(String?)? validator,
   }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: GoogleFonts.plusJakartaSans(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: const Color(0xFF1E293B),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
+              color: kBlack,
+              letterSpacing: 0.5,
+            ),
           ),
-        ),
-        const SizedBox(height: 8),
-        TextFormField(
-          controller: controller,
-          obscureText: obscureText,
-          validator:
-              validator ??
-              (value) => value!.isEmpty ? "Tidak boleh kosong" : null,
-          style: GoogleFonts.plusJakartaSans(
-            fontSize: 15,
-            color: const Color(0xFF1E293B),
-            fontWeight: FontWeight.w500,
-          ),
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: GoogleFonts.plusJakartaSans(
-              color: const Color(0xFF94A3B8),
+          const SizedBox(height: 8),
+          TextFormField(
+            controller: controller,
+            obscureText: obscureText,
+            validator:
+                validator ??
+                (value) => value!.isEmpty ? "Tidak boleh kosong" : null,
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 15,
+              color: kBlack,
+              fontWeight: FontWeight.w700,
             ),
-            filled: true,
-            fillColor: Colors.white,
-            contentPadding: const EdgeInsets.symmetric(
-              vertical: 16,
-              horizontal: 16,
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(
-                color: Color(0xFFE2E8F0),
-              ), // Border abu halus
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(
-                color: Color(0xFF009688),
-                width: 1.5,
-              ), // Teal saat aktif
-            ),
-            errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(
-                color: Color(0xFFEF4444),
-              ), // Merah saat error
-            ),
-            suffixIcon: IconButton(
-              icon: Icon(
-                obscureText
-                    ? Icons.visibility_off_rounded
-                    : Icons.visibility_rounded,
-                color: const Color(0xFF94A3B8),
-                size: 20,
+            decoration: InputDecoration(
+              hintText: hint,
+              hintStyle: GoogleFonts.plusJakartaSans(
+                color: kBlack.withOpacity(0.5),
+                fontWeight: FontWeight.w600,
               ),
-              onPressed: onToggleVisibility,
+              filled: true,
+              fillColor: kWhite,
+              contentPadding: const EdgeInsets.symmetric(
+                vertical: 16,
+                horizontal: 16,
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: const BorderSide(
+                  color: kBlack,
+                  width: kBorderWidth,
+                ),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: const BorderSide(color: kBlack, width: 3.0),
+              ),
+              errorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: const BorderSide(
+                  color: Color(0xFFFF4C4C), // Merah brutal
+                  width: kBorderWidth,
+                ),
+              ),
+              focusedErrorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: const BorderSide(
+                  color: Color(0xFFFF4C4C),
+                  width: 3.0,
+                ),
+              ),
+              suffixIcon: IconButton(
+                icon: Icon(
+                  obscureText
+                      ? Icons.visibility_off_rounded
+                      : Icons.visibility_rounded,
+                  color: kBlack,
+                  size: 20,
+                ),
+                onPressed: onToggleVisibility,
+              ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

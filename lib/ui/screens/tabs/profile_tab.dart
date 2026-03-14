@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:nusalearn/ui/screens/login_screen.dart';
+import 'package:path_provider/path_provider.dart';
 
 // Import Core & API
 import 'package:nusalearn/core/api/api_client.dart';
@@ -65,54 +66,46 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
   }
 
   void _loadUser() async {
-    final prefs = await SharedPreferences.getInstance();
     final db = await DatabaseHelper.instance.database;
-
-    setState(() {
-      _userName = prefs.getString('user_name') ?? "Siswa";
-      _school = prefs.getString('user_school') ?? "Belum ada sekolah";
-
-      String? localPath = prefs.getString('user_image_path');
-      if (localPath != null && File(localPath).existsSync()) {
-        _localImage = File(localPath);
-      } else {
-        _localImage = null;
-      }
-
-      String? serverUrl = prefs.getString('user_image_url');
-      if (serverUrl != null && serverUrl.startsWith('http')) {
-        _serverImageUrl = serverUrl;
-      } else {
-        _serverImageUrl = null;
-      }
-    });
-
     final userResult = await db.query('users', limit: 1);
+
     if (userResult.isNotEmpty) {
-      int userId = userResult.first['id'] as int;
-      int calculatedLevel = await AdaptiveService().calculateStudentLevel(
-        userId,
-      );
-
-      final xpResult = await db.rawQuery(
-        'SELECT COUNT(*) as total FROM student_progress WHERE user_id = ? AND is_correct = 1',
-        [userId],
-      );
-      int totalXP = xpResult.first['total'] as int? ?? 0;
-
+      final user = userResult.first;
       setState(() {
-        _currentLevel = calculatedLevel;
-        _totalXP = totalXP;
+        // ✅ FIX: Tambahkan 'as String?' agar tipe data sesuai
+        _userName = (user['name'] as String?) ?? "Siswa";
+        _school = (user['school_origin'] as String?) ?? "Belum ada sekolah";
+
+        String? localPath = user['local_image_path'] as String?;
+        if (localPath != null && File(localPath).existsSync()) {
+          _localImage = File(localPath);
+        }
+
+        _serverImageUrl = user['image_url'] as String?;
       });
+
+      // Hitung Level & XP
+      int? userId = user['id'] as int?;
+      if (userId != null) {
+        int calculatedLevel = await AdaptiveService().calculateStudentLevel(
+          userId,
+        );
+        final xpResult = await db.rawQuery(
+          'SELECT COUNT(*) as total FROM student_progress WHERE user_id = ? AND is_correct = 1',
+          [userId],
+        );
+        setState(() {
+          _currentLevel = calculatedLevel;
+          _totalXP = xpResult.first['total'] as int? ?? 0;
+        });
+      }
     }
 
-    // Fake delay untuk menyamakan animasi transisi HTML yang diminta
     await Future.delayed(const Duration(milliseconds: 600));
-    if (mounted) {
-      setState(() => _isLoadingData = false);
-    }
+    if (mounted) setState(() => _isLoadingData = false);
   }
 
+  // Ganti fungsi _pickAndUploadImage dengan ini:
   Future<void> _pickAndUploadImage() async {
     final picker = ImagePicker();
     try {
@@ -121,58 +114,48 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
         imageQuality: 50,
       );
 
-      if (pickedFile != null) {
-        File imageFile = File(pickedFile.path);
-        setState(() => _isUploadingImage = true);
-        await _uploadImageToServer(imageFile);
+      // 1. Cek dulu, kalau user batal pilih, jangan lakukan apa-apa
+      if (pickedFile == null) return;
+
+      setState(() => _isUploadingImage = true);
+
+      // 2. HAPUS FILE LAMA (Hanya jika user sudah pilih foto baru)
+      // Ini penting agar memori HP siswa SD tidak penuh karena sampah foto lama
+      if (_localImage != null && await _localImage!.exists()) {
+        try {
+          await _localImage!.delete();
+        } catch (e) {
+          /* ignore */
+        }
       }
-    } catch (e) {
-      debugPrint("Error picking image: $e");
-      if (mounted) _showSnackBar("Gagal mengambil gambar", isError: true);
-    } finally {
-      if (mounted) setState(() => _isUploadingImage = false);
-    }
-  }
 
-  Future<void> _uploadImageToServer(File imageFile) async {
-    try {
-      String fileName = imageFile.path.split('/').last;
+      // 3. SIMPAN PERMANEN KE DOKUMEN APLIKASI
+      final dir = await getApplicationDocumentsDirectory();
+      final fileName = "profile_${DateTime.now().millisecondsSinceEpoch}.png";
+      final permanentFile = await File(
+        pickedFile.path,
+      ).copy('${dir.path}/$fileName');
 
-      FormData formData = FormData.fromMap({
-        'name': _userName,
-        'image': await MultipartFile.fromFile(
-          imageFile.path,
-          filename: fileName,
-        ),
+      // 4. UPDATE SQLITE (Data Utama)
+      final db = await DatabaseHelper.instance.database;
+      await db.update('users', {
+        'local_image_path': permanentFile.path,
+        'is_synced': 0, // Tandai butuh upload
+      }, where: 'id IS NOT NULL');
+
+      // 5. UPDATE UI INSTAN
+      setState(() {
+        _localImage = permanentFile;
       });
 
-      final response = await ApiClient.getClient().post(
-        '/update-profile',
-        data: formData,
-      );
+      // 6. SYNC BACKGROUND (Tanpa await, biar UI tidak freeze)
+      SyncService().syncPendingProfile();
 
-      if (response.data['status'] == 'success') {
-        final prefs = await SharedPreferences.getInstance();
-
-        if (response.data['data'] != null &&
-            response.data['data']['image_url'] != null) {
-          String newUrl = response.data['data']['image_url'];
-          await prefs.setString('user_image_url', newUrl);
-        }
-
-        await prefs.remove('user_image_path');
-        _loadUser();
-
-        if (mounted) _showSuccessPopup();
-      }
-    } on DioException catch (e) {
-      String err = "Gagal upload foto";
-      if (e.response != null) {
-        err = e.response?.data['message'] ?? err;
-      }
-      if (mounted) _showSnackBar(err, isError: true);
+      _showSnackBar("Profil disimpan offline & sedang menyinkronkan...");
     } catch (e) {
-      if (mounted) _showSnackBar("Terjadi kesalahan sistem", isError: true);
+      _showSnackBar("Gagal memproses foto", isError: true);
+    } finally {
+      if (mounted) setState(() => _isUploadingImage = false);
     }
   }
 
@@ -197,14 +180,37 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
   }
 
   void _logout() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.clear();
-    if (mounted) {
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (context) => const LoginScreen()),
-        (r) => false,
-      );
+    if (mounted) setState(() => _isLoadingData = true);
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('token');
+      await prefs.remove('user_id');
+      await prefs.remove('is_logged_in');
+
+      final db = await DatabaseHelper.instance.database;
+
+      await db.transaction((txn) async {
+        await txn.delete('users');
+        await txn.delete('student_progress');
+        await txn.delete('recent_materials');
+      });
+
+      _localImage = null;
+      _serverImageUrl = null;
+
+      if (mounted) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
+          (Route<dynamic> route) => false,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoadingData = false);
+        _showSnackBar("Gagal membersihkan memori logout: $e", isError: true);
+      }
     }
   }
 
