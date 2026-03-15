@@ -19,6 +19,7 @@ import 'package:nusalearn/ui/screens/profile/edit_profile_screen.dart';
 import 'package:nusalearn/ui/screens/profile/change_password_screen.dart';
 import 'package:nusalearn/ui/screens/profile/language_screen.dart';
 import 'package:nusalearn/ui/screens/profile/help_center_screen.dart';
+import 'package:nusalearn/ui/screens/profile/progress_screen.dart';
 
 // --- KONSTANTA NEO-BRUTALISM ---
 const Color kLime = Color(0xFFD2F945);
@@ -455,6 +456,14 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
                           title: "Edit Data Diri",
                           bgColor: const Color(0xFFB3E5FF), // Blue
                           onTap: () => _navigateTo(const EditProfileScreen()),
+                        ),
+                        _buildMenuItem(
+                          icon: Icons.insert_chart_rounded,
+                          title: "Lihat Progres Siswa",
+                          bgColor: const Color(0xFFFFE066),
+                          onTap: () => _navigateTo(
+                            const ProgressScreen(),
+                          ), // BUKA KOMENTAR INI
                         ),
                         _buildMenuItem(
                           icon: Icons.lock_rounded,
