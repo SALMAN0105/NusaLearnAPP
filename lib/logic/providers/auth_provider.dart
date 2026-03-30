@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:nusalearn/core/api/api_client.dart';
@@ -190,6 +191,26 @@ class AuthProvider extends ChangeNotifier {
     return false;
   }
 
+  final StreamController<Map<String, dynamic>> loginProgressController =
+      StreamController<Map<String, dynamic>>.broadcast();
+
+  Stream<Map<String, dynamic>> get loginProgressStream =>
+      loginProgressController.stream;
+
+  void _emitProgress(String step, String status, double progress) {
+    loginProgressController.add({
+      'step': step,
+      'status': status, // 'loading' | 'success' | 'error'
+      'progress': progress,
+    });
+  }
+
+  @override
+  void dispose() {
+    loginProgressController.close();
+    super.dispose();
+  }
+
   Future<bool> login(String username, String password) async {
     setLoading(true);
 
@@ -218,6 +239,7 @@ class AuthProvider extends ChangeNotifier {
         ); // ✅ Key yang benar: 'auth_token'
         await prefs.setString('username', username);
         await prefs.setInt('userid', userId);
+        await prefs.setBool('is_logged_in', true);
 
         // ✅ Verifikasi token tersimpan
         String? savedToken = prefs.getString('auth_token');
@@ -253,46 +275,46 @@ class AuthProvider extends ChangeNotifier {
         // 1. Download Kamus
         if (userLang != 'id') {
           totalItems++;
-          print('📖 SYNC: Download kamus $userLang');
+          _emitProgress('Mengunduh kamus $userLang...', 'loading', 0.1);
           try {
             bool success = await DictionaryService.instance.downloadDictionary(
               userLang,
             );
-
             if (success) {
               successItems++;
-              print('✅ Kamus berhasil didownload');
+              _emitProgress('Kamus $userLang', 'success', 0.33);
             } else {
               errors.add('Kamus download failed');
+              _emitProgress('Kamus $userLang', 'error', 0.33);
             }
           } catch (e) {
             errors.add('Kamus: $e');
-            print('❌ SYNC Error kamus - $e');
+            _emitProgress('Kamus $userLang', 'error', 0.33);
           }
         }
 
         // 2. Download Materi
         totalItems++;
-        print('📚 SYNC: Download materi...');
+        _emitProgress('Mengunduh materi pembelajaran...', 'loading', 0.4);
         try {
           await SyncService().syncMaterials(force: true);
           successItems++;
-          print('✅ Materi berhasil didownload');
+          _emitProgress('Materi pembelajaran', 'success', 0.66);
         } catch (e) {
           errors.add('Materi: $e');
-          print('❌ SYNC Error materi - $e');
+          _emitProgress('Materi pembelajaran', 'error', 0.66);
         }
 
         // 3. Download Soal
         totalItems++;
-        print('📝 SYNC: Download soal...');
+        _emitProgress('Mengunduh soal latihan...', 'loading', 0.75);
         try {
           await SyncService().syncQuestions(force: true);
           successItems++;
-          print('✅ Soal berhasil didownload');
+          _emitProgress('Soal latihan', 'success', 1.0);
         } catch (e) {
           errors.add('Soal: $e');
-          print('❌ SYNC Error soal - $e');
+          _emitProgress('Soal latihan', 'error', 1.0);
         }
 
         // ✅ FIX 3: Update last sync timestamp

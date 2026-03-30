@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:nusalearn/core/services/network_sync_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:nusalearn/logic/providers/auth_provider.dart';
 import 'package:nusalearn/ui/screens/login_screen.dart';
@@ -10,6 +11,7 @@ import 'package:nusalearn/core/services/tflite_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  NetworkAwareSyncManager().initialize();
   await TFLiteService().loadModel();
   var micStatus = await Permission.microphone.status;
   print("🎤 Microphone Permission: $micStatus");

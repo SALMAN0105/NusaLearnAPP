@@ -418,14 +418,41 @@ class SyncService {
     }
   }
 
-  Future<void> performGlobalSync() async {
+  Future<void> performGlobalSync({bool force = false}) async {
     print('📡 Mencoba sinkronisasi background...');
 
-    // 1. Sinkronisasi Foto Profil
     await syncPendingProfile();
-
-    // 2. Sinkronisasi Progress Belajar
     await syncUpProgress();
+
+    try {
+      final db = await DatabaseHelper.instance.database;
+      final userList = await db.query('users', limit: 1);
+
+      // Default ke 'id' jika user belum ada atau bahasa kosong
+      String langCode = 'id';
+      if (userList.isNotEmpty && userList.first['language_code'] != null) {
+        langCode = userList.first['language_code'] as String;
+      }
+
+      bool dictSuccess = await DictionaryService.instance.downloadDictionary(
+        langCode,
+      );
+      if (!dictSuccess) {
+        print(
+          '⚠️ [SyncService] Gagal update kamus, lanjut sinkronisasi materi.',
+        );
+      } else {
+        print('✅ [SyncService] Kamus berhasil diperbarui.');
+      }
+    } catch (e) {
+      print('❌ [SyncService] Error saat memproses kamus: $e');
+    }
+
+    // Tambahkan sync materi & soal jika force = true
+    if (force) {
+      await syncMaterials(force: true);
+      await syncQuestions(force: true);
+    }
 
     print('✅ Sinkronisasi background selesai.');
   }

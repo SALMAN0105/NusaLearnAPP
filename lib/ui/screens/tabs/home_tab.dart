@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'dart:ui';
 import 'dart:async';
-import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -42,9 +41,6 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
   late AnimationController _waveController;
   late AnimationController _spinController;
 
-  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
-  bool _isSyncing = false;
-
   @override
   void initState() {
     super.initState();
@@ -58,45 +54,13 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
       vsync: this,
       duration: const Duration(seconds: 2),
     )..repeat();
-
-    _initializeNetworkObserver();
   }
 
   @override
   void dispose() {
     _waveController.dispose();
     _spinController.dispose();
-    _connectivitySubscription?.cancel();
     super.dispose();
-  }
-
-  void _initializeNetworkObserver() {
-    _connectivitySubscription = Connectivity().onConnectivityChanged.listen((
-      List<ConnectivityResult> results,
-    ) {
-      // Jika mendeteksi transisi ke jaringan seluler atau WiFi
-      if (results.contains(ConnectivityResult.mobile) ||
-          results.contains(ConnectivityResult.wifi)) {
-        _executeThreadSafeSync();
-      }
-    });
-    _executeThreadSafeSync();
-  }
-
-  Future<void> _executeThreadSafeSync() async {
-    if (_isSyncing) return;
-
-    _isSyncing = true;
-    try {
-      await SyncService().performGlobalSync();
-      if (mounted) {
-        await _loadAllHomeData();
-      }
-    } catch (e) {
-      debugPrint("Sync terinterupsi, sistem fallback ke Offline Mode: $e");
-    } finally {
-      _isSyncing = false;
-    }
   }
 
   Future<void> _loadAllHomeData() async {

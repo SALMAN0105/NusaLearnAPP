@@ -1,10 +1,18 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
+import 'dart:ui';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:nusalearn/logic/providers/auth_provider.dart';
 import 'package:nusalearn/ui/screens/dashboard_screen.dart';
 import 'package:nusalearn/ui/screens/register_screen.dart';
 import 'package:nusalearn/ui/widgets/custom_widgets.dart';
+
+// ← TAMBAH DI SINI, setelah semua import
+const Color kBlack = Color(0xFF000000);
+const Color kWhite = Color(0xFFFFFFFF);
+const Color kPurple = Color.fromARGB(255, 156, 132, 242);
+const Color kLime = Color(0xFFD2F945);
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -108,46 +116,80 @@ class _LoginScreenState extends State<LoginScreen>
     super.dispose();
   }
 
-  // ==========================================
-  // LOGIKA ASLI ANDA (TIDAK DISENTUH)
-  // ==========================================
+  bool _isDownloading = false;
+  List<Map<String, dynamic>> _downloadSteps = [];
+  double _overallProgress = 0.0;
+  StreamSubscription? _progressSub;
+
   void _handleLogin() async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
 
-    if (_usernameController.text.isEmpty || _passwordController.text.isEmpty) {
-      showCustomSnackbar(
-        context,
-        "Isi username & password dulu ya!",
-        isError: true,
-      );
+    if (_usernameController.text.isEmpty || _passwordController.text.isEmpty)
       return;
-    }
+
+    // Subscribe ke stream progress SEBELUM login dipanggil
+    _progressSub = authProvider.loginProgressStream.listen((data) {
+      if (mounted) {
+        setState(() {
+          _overallProgress = data['progress'];
+
+          // Update atau tambah step
+          final idx = _downloadSteps.indexWhere(
+            (s) => s['step'].toString().startsWith(
+              data['status'] == 'loading' ? '' : data['step'].toString(),
+            ),
+          );
+
+          if (data['status'] == 'loading') {
+            // Tampilkan step yang sedang berjalan
+            _downloadSteps = [
+              ..._downloadSteps,
+              {'step': data['step'], 'status': 'loading'},
+            ];
+          } else {
+            // Update status step terakhir jadi success/error
+            if (_downloadSteps.isNotEmpty) {
+              final last = Map<String, dynamic>.from(_downloadSteps.last);
+              last['step'] = data['step'];
+              last['status'] = data['status'];
+              _downloadSteps = [
+                ..._downloadSteps.sublist(0, _downloadSteps.length - 1),
+                last,
+              ];
+            }
+          }
+        });
+      }
+    });
+
+    setState(() {
+      _isDownloading = false;
+      _downloadSteps = [];
+      _overallProgress = 0.0;
+    });
 
     bool success = await authProvider.login(
       _usernameController.text,
       _passwordController.text,
     );
 
+    await _progressSub?.cancel();
+
     if (success && mounted) {
-      showCustomSnackbar(context, "Selamat Datang Kembali!");
+      showCustomSnackbar(context, "Login berhasil! Selamat belajar 🎉");
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => const DashboardScreen()),
       );
-    } else {
-      if (mounted) {
-        showCustomSnackbar(
-          context,
-          "Username atau Password salah nih.",
-          isError: true,
-        );
-      }
+    } else if (mounted) {
+      setState(() => _isDownloading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
+    final authProvider = Provider.of<AuthProvider>(context);
 
     return Scaffold(
       backgroundColor: AppColors.primaryDark,
@@ -189,10 +231,11 @@ class _LoginScreenState extends State<LoginScreen>
                               horizontal: 24,
                               vertical: 10,
                             ),
+                            // GANTI DARI SINI (Baris 248 - 290)
                             child: Stack(
                               alignment: Alignment.center,
                               children: [
-                                // Tombol Back di Kiri
+                                // Tombol Back tetap di kiri
                                 Align(
                                   alignment: Alignment.centerLeft,
                                   child: IconButton(
@@ -205,49 +248,66 @@ class _LoginScreenState extends State<LoginScreen>
                                     ),
                                   ),
                                 ),
-                                // Logo dan Teks di Tengah (DIJAMIN TIDAK AKAN MELIPAT)
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Container(
-                                      width: 48,
-                                      height: 48,
-                                      decoration: BoxDecoration(
-                                        color: AppColors.primaryDark,
-                                        borderRadius: BorderRadius.circular(14),
-                                      ),
-                                      child: const Center(
-                                        child: Icon(
-                                          Icons.school_rounded,
-                                          color: AppColors.accentLime,
-                                          size: 28,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    RichText(
-                                      text: TextSpan(
-                                        text: 'NusaLearn',
-                                        style: GoogleFonts.plusJakartaSans(
-                                          fontWeight: FontWeight.w900,
-                                          fontSize: 28,
+
+                                // Logo dan Teks di Tengah (DIPERBAIKI)
+                                // Berikan padding horizontal agar tidak menabrak tombol back
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 40,
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Container(
+                                        width:
+                                            40, // Ukuran disesuaikan agar proporsional
+                                        height: 40,
+                                        decoration: BoxDecoration(
                                           color: AppColors.primaryDark,
-                                          letterSpacing: -0.5,
-                                        ),
-                                        children: [
-                                          TextSpan(
-                                            text: '.',
-                                            style: TextStyle(
-                                              color: AppColors.brandPurple,
-                                            ),
+                                          borderRadius: BorderRadius.circular(
+                                            10,
                                           ),
-                                        ],
+                                        ),
+                                        child: const Center(
+                                          child: Icon(
+                                            Icons.school_rounded,
+                                            color: AppColors.accentLime,
+                                            size: 22,
+                                          ),
+                                        ),
                                       ),
-                                    ),
-                                  ],
+                                      const SizedBox(width: 10),
+                                      // Flexible adalah kunci agar teks mau mengalah jika layar sempit
+                                      Flexible(
+                                        child: RichText(
+                                          overflow: TextOverflow
+                                              .ellipsis, // Tambahan keamanan
+                                          text: TextSpan(
+                                            text: 'NusaLearn',
+                                            style: GoogleFonts.plusJakartaSans(
+                                              fontWeight: FontWeight.w900,
+                                              fontSize:
+                                                  24, // Diturunkan ke 24 agar lebih aman
+                                              color: AppColors.primaryDark,
+                                              letterSpacing: -0.5,
+                                            ),
+                                            children: const [
+                                              TextSpan(
+                                                text: '.',
+                                                style: TextStyle(
+                                                  color: AppColors.brandPurple,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ],
                             ),
+                            // SAMPAI SINI
                           ),
                         ),
                       ),
@@ -424,6 +484,168 @@ class _LoginScreenState extends State<LoginScreen>
                   ),
                 ),
               ],
+            ),
+          ),
+          if (authProvider.isLoading) _buildDownloadOverlay(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDownloadOverlay() {
+    return Positioned.fill(
+      child: ClipRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+          child: Container(
+            color: Colors.black.withOpacity(0.4),
+            child: Center(
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 32),
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: kWhite,
+                  border: Border.all(color: kBlack, width: 1.5),
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: const [
+                    BoxShadow(color: kBlack, offset: Offset(5, 5)),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Header
+                    // Header di dalam Download Overlay
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: kPurple,
+                            border: Border.all(color: kBlack, width: 1.5),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(
+                            Icons.download_rounded,
+                            color: kBlack,
+                            size: 18,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        // KUNCI PERBAIKAN: Bungkus Column teks dengan Expanded
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize
+                                .min, // Tambahkan ini agar hemat ruang
+                            children: [
+                              Text(
+                                "Menyiapkan Materi",
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 15,
+                                  color: kBlack,
+                                ),
+                                softWrap:
+                                    true, // Pastikan teks bisa pindah baris
+                              ),
+                              Text(
+                                "Hanya dilakukan sekali saat login pertama",
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 10,
+                                  color: Colors.grey[600],
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                softWrap: true, // Tambahkan ini juga
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    // Overall Progress Bar
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: LinearProgressIndicator(
+                        value: _overallProgress,
+                        minHeight: 10,
+                        backgroundColor: Colors.grey[200],
+                        valueColor: const AlwaysStoppedAnimation<Color>(kLime),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        "${(_overallProgress * 100).toInt()}%",
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          color: kBlack,
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // Step List
+                    if (_downloadSteps.isEmpty)
+                      _buildStepTile("Menghubungkan ke server...", "loading")
+                    else
+                      ..._downloadSteps.map(
+                        (s) => _buildStepTile(s['step'], s['status']),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStepTile(String label, String status) {
+    Widget icon;
+    if (status == 'loading') {
+      icon = const SizedBox(
+        // Tambah const biar efisien
+        width: 16,
+        height: 16,
+        child: CircularProgressIndicator(strokeWidth: 2, color: kBlack),
+      );
+    } else if (status == 'success') {
+      icon = const Icon(
+        Icons.check_circle_rounded,
+        color: Colors.green,
+        size: 16,
+      );
+    } else {
+      icon = const Icon(Icons.cancel_rounded, color: Colors.red, size: 16);
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment
+            .start, // Agar icon tetap di atas jika teks berbaris-baris
+        children: [
+          icon,
+          const SizedBox(width: 10),
+          // KUNCI PERBAIKAN: Gunakan Expanded agar teks tidak "nendang" keluar layar
+          Expanded(
+            child: Text(
+              label,
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: status == 'error' ? Colors.red[700] : kBlack,
+              ),
+              // Jika masih kepanjangan, teks akan turun ke baris baru secara otomatis
             ),
           ),
         ],

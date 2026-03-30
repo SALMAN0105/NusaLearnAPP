@@ -49,7 +49,10 @@ class DatabaseHelper {
       school_origin TEXT,
       language_code TEXT,
       postal_code TEXT,
-      last_sync TEXT
+      last_sync TEXT,
+      image_url TEXT,
+      local_image_path TEXT,
+      is_synced INTEGER DEFAULT 1
     )
   ''');
 
