@@ -6,13 +6,11 @@ import 'package:nusalearn/logic/providers/auth_provider.dart';
 import 'package:nusalearn/ui/screens/login_screen.dart';
 import 'package:nusalearn/ui/screens/dashboard_screen.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:nusalearn/core/services/tflite_service.dart';
 // Hapus import splash_screen.dart terpisah, kita buat terintegrasi di sini
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   NetworkAwareSyncManager().initialize();
-  await TFLiteService().loadModel();
   var micStatus = await Permission.microphone.status;
   print("🎤 Microphone Permission: $micStatus");
   runApp(const NusaLearn());

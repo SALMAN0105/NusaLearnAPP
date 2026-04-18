@@ -1,11 +1,13 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:nusalearn/core/api/api_client.dart';
 import 'package:nusalearn/core/database/database_helper.dart';
 import 'package:nusalearn/core/services/dictionary_service.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
 class SyncService {
@@ -27,6 +29,7 @@ class SyncService {
     bool dictSuccess = await DictionaryService.instance.downloadDictionary(
       languageCode,
     );
+
     if (!dictSuccess) {
       print('⚠️ SYNC: Gagal download kamus, lanjutkan sync lainnya');
     }
@@ -34,10 +37,52 @@ class SyncService {
     await syncMaterials(force: force);
     await syncQuestions(force: force);
 
+    await _syncAllRequiredAssets();
+
     print('✅ FULL SYNC SELESAI.');
   }
 
+  Future<void> _syncAllRequiredAssets() async {
+    try {
+      final db = await DatabaseHelper.instance.database;
+
+      // Ambil semua assets_required dari questions
+      final questions = await db.query(
+        'questions',
+        columns: ['assets_required'],
+        where: 'assets_required IS NOT NULL AND is_deleted = 0',
+      );
+
+      // Kumpulkan semua filename unik
+      final Set<String> allFilenames = {};
+      for (final q in questions) {
+        final raw = q['assets_required'] as String?;
+        if (raw != null && raw.isNotEmpty) {
+          try {
+            final List decoded = jsonDecode(raw);
+            allFilenames.addAll(decoded.map((e) => e.toString()));
+          } catch (e) {
+            print('⚠️ Gagal parse assets_required: $raw');
+          }
+        }
+      }
+
+      if (allFilenames.isEmpty) {
+        print('✅ Tidak ada aset yang diperlukan soal.');
+        return;
+      }
+
+      print('📦 Total aset unik dari semua soal: ${allFilenames.length}');
+      await syncAssets(allFilenames.toList());
+    } catch (e) {
+      print('❌ Error _syncAllRequiredAssets: $e');
+    }
+  }
+
   /// --- BARU: SYNC UP (Upload Progress Belajar) ---
+  // lib/core/services/sync_service.dart
+
+  /// ✅ P7: Update syncUpProgress() support JSON answer
   Future<void> syncUpProgress() async {
     final db = await DatabaseHelper.instance.database;
     final unsyncedData = await db.query(
@@ -53,19 +98,39 @@ class SyncService {
     print('📤 Mengupload ${unsyncedData.length} data progress ke server...');
 
     try {
-      List<Map<String, dynamic>> payload = unsyncedData
-          .map(
-            (e) => {
-              'question_id': e['question_id'],
-              'student_answer': e['student_answer'],
-              'is_correct': e['is_correct'] == 1,
-              'time_spent_seconds': e['time_spent_seconds'] ?? 0,
-              'answered_at': e['answered_at'],
-            },
-          )
-          .toList();
+      List<Map<String, dynamic>> payload = unsyncedData.map((e) {
+        final templateType = e['template_type'] as String? ?? 'multiple_choice';
+        final rawAnswer = e['student_answer'] as String? ?? '';
 
-      print('📦 Payload to upload: ${jsonEncode({'progress': payload})}');
+        // ✅ P7: Decode JSON answer untuk template kompleks
+        dynamic studentAnswer;
+        switch (templateType) {
+          case 'drag_and_drop':
+          case 'matching_game':
+          case 'image_quiz':
+            // Coba decode sebagai JSON
+            try {
+              studentAnswer = jsonDecode(rawAnswer);
+            } catch (_) {
+              studentAnswer = rawAnswer; // fallback ke string
+            }
+            break;
+          case 'multiple_choice':
+          case 'fill_blank':
+          default:
+            studentAnswer = rawAnswer; // String biasa
+            break;
+        }
+
+        return {
+          'question_id': e['question_id'],
+          'student_answer': studentAnswer,
+          'is_correct': e['is_correct'] == 1,
+          'time_spent_seconds': e['time_spent_seconds'] ?? 0,
+          'answered_at': e['answered_at'],
+          'template_type': templateType, // ✅ P7: Kirim template_type
+        };
+      }).toList();
 
       final response = await _dio.post(
         'sync/progress',
@@ -73,10 +138,12 @@ class SyncService {
       );
 
       if (response.data['status'] == 'success') {
-        print('✅ Upload Berhasil! Menandai data lokal sebagai synced...');
+        print(
+          '✅ Upload Berhasil! Menandai ${unsyncedData.length} data sebagai synced...',
+        );
 
         // Batch update
-        Batch batch = db.batch();
+        final batch = db.batch();
         for (var item in unsyncedData) {
           batch.update(
             'student_progress',
@@ -86,17 +153,27 @@ class SyncService {
           );
         }
         await batch.commit(noResult: true);
+
+        // Log jika ada error parsial dari server
+        final errors = response.data['errors'] as List? ?? [];
+        if (errors.isNotEmpty) {
+          print('⚠️ ${errors.length} item gagal di server:');
+          for (final err in errors) {
+            print('   Index ${err['index']}: ${err['message']}');
+          }
+        }
       }
     } on DioException catch (e) {
       if (e.response != null) {
-        print('❌ Server Error (422): Detail: ${e.response?.data}');
+        print(
+          '❌ Server Error (${e.response?.statusCode}): ${e.response?.data}',
+        );
       } else {
-        print('❌ Gagal Upload Progress: $e');
+        print('❌ Gagal Upload Progress (offline?): ${e.message}');
       }
     }
   }
 
-  /// --- SYNC MATERI (Delta Sync dengan parameter force) ---
   /// --- SYNC MATERI (Delta Sync dengan parameter force) ---
   Future<void> syncMaterials({bool force = false}) async {
     try {
@@ -159,12 +236,36 @@ class SyncService {
           // 2. Download Assets dalam Content JSON
           // Handle content_indo dari API
           var rawContent = item['content_indo'] ?? item['contentindo'] ?? [];
-          List<dynamic> contentJson = (rawContent is String)
-              ? jsonDecode(rawContent)
-              : rawContent;
+          dynamic parsedContent;
+
+          if (rawContent is String) {
+            try {
+              parsedContent = jsonDecode(rawContent);
+            } catch (e) {
+              parsedContent = [];
+            }
+          } else {
+            parsedContent = rawContent;
+          }
+
+          List<dynamic> nodesToScan = [];
+          if (parsedContent is List) {
+            nodesToScan = parsedContent; // Format Lama
+          } else if (parsedContent is Map &&
+              parsedContent.containsKey('content_structured')) {
+            // Format Baru AI
+            var sections = parsedContent['content_structured'];
+            if (sections is List) {
+              for (var sec in sections) {
+                if (sec['chunks'] is List) {
+                  nodesToScan.addAll(sec['chunks']);
+                }
+              }
+            }
+          }
 
           List<String> failedAssets = [];
-          await _scanAndDownloadAssets(contentJson, failedAssets);
+          await _scanAndDownloadAssets(nodesToScan, failedAssets);
 
           // 3. Simpan ke database (Gunakan struktur snake_case BARU)
           await db.insert('materials', {
@@ -179,7 +280,7 @@ class SyncService {
             'language_code':
                 item['language_code'] ?? item['languagecode'] ?? 'id',
             'content_json': jsonEncode(
-              contentJson,
+              parsedContent,
             ), // Simpan sebagai JSON String
             'updated_at':
                 item['updated_at'] ??
@@ -244,14 +345,16 @@ class SyncService {
     }
   }
 
-  /// --- SYNC QUESTIONS (Delta Sync dengan parameter force) ---
+  // lib/core/services/sync_service.dart
+
   Future<void> syncQuestions({bool force = false}) async {
     try {
       final db = await DatabaseHelper.instance.database;
-      final user = (await db.query('users', limit: 1)).firstOrNull;
+      final user = (await db.query('users', limit: 1)).isNotEmpty
+          ? (await db.query('users', limit: 1)).first
+          : null;
 
       String? lastSync = force ? null : (user?['last_sync'] as String?);
-
       print('📝 Cek Soal Baru... Last Sync: ${lastSync ?? "FULL SYNC"}');
 
       final response = await _dio.get(
@@ -273,34 +376,206 @@ class SyncService {
             continue;
           }
 
-          // Parse options_json dengan aman
-          var rawOptions = item['options_json'] ?? item['optionsjson'] ?? [];
+          // ✅ Parse options_json
+          var rawOptions = item['options_json'] ?? [];
           String optionsString = (rawOptions is String)
               ? rawOptions
               : jsonEncode(rawOptions);
 
+          // ✅ FIX #6: Parse question_data
+          var rawQuestionData = item['question_data'];
+          String? questionDataString;
+          if (rawQuestionData != null) {
+            questionDataString = (rawQuestionData is String)
+                ? rawQuestionData
+                : jsonEncode(rawQuestionData);
+          }
+
+          // ✅ FIX #6: Parse assets_required
+          var rawAssetsRequired = item['assets_required'];
+          String? assetsRequiredString;
+          if (rawAssetsRequired != null) {
+            // Server sudah guarantee array, tapi tetap defensive
+            assetsRequiredString = (rawAssetsRequired is String)
+                ? rawAssetsRequired
+                : jsonEncode(rawAssetsRequired);
+          }
+
+          // ✅ FIX #6: Simpan SEMUA field termasuk yang baru
           await db.insert('questions', {
             'id': item['id'],
-            'material_id': item['material_id'] ?? item['materialid'],
-            'question_text_indo':
-                item['question_text_indo'] ??
-                item['questiontextindo'] ??
-                'Soal Kosong',
-            'question_text_tolaki':
-                item['question_text_tolaki'] ?? item['questiontexttolaki'],
+            'material_id': item['material_id'],
+            'question_text_indo': item['question_text_indo'] ?? 'Soal Kosong',
+            'question_text_tolaki': item['question_text_tolaki'],
             'options_json': optionsString,
-            'correct_answer_key':
-                item['correct_answer_key'] ?? item['correctanswerkey'] ?? 'a',
-            'difficulty_weight':
-                item['difficulty_weight'] ?? item['difficultyweight'] ?? 1,
-            'updated_at': item['updated_at'] ?? item['updatedat'],
+            'correct_answer_key': item['correct_answer_key'] ?? 'a',
+            'difficulty_weight': item['difficulty_weight'] ?? 1,
+            // ✅ Field baru Fase 3
+            'template_type': item['template_type'] ?? 'multiple_choice',
+            'question_data': questionDataString,
+            'assets_required': assetsRequiredString,
+            'updated_at': item['updated_at'],
             'is_deleted': 0,
           }, conflictAlgorithm: ConflictAlgorithm.replace);
         }
+
+        print('✅ Sync Questions selesai: ${data.length} soal diperbarui.');
       }
     } catch (e) {
       print('❌ Error Sync Soal: $e');
     }
+  }
+
+  Future<SyncAssetsResult> syncAssets(List<String> filenames) async {
+    if (filenames.isEmpty) {
+      print('✅ Tidak ada aset yang perlu di-sync.');
+      return SyncAssetsResult(downloaded: 0, failed: 0, skipped: 0);
+    }
+
+    print('📦 Memulai sync ${filenames.length} aset...');
+
+    final db = await DatabaseHelper.instance.database;
+
+    // 1. Batch check lokal: mana yang sudah ada
+    final existing = await db.query(
+      'downloaded_assets',
+      where: 'filename IN (${filenames.map((_) => '?').join(',')})',
+      whereArgs: filenames,
+    );
+    final existingFilenames = existing
+        .map((e) => e['filename'] as String)
+        .toSet();
+
+    // 2. Filter: hanya yang belum ada
+    final toDownload = filenames
+        .where((f) => !existingFilenames.contains(f))
+        .toList();
+    final skipped = filenames.length - toDownload.length;
+
+    print(
+      '📊 Status: ${existingFilenames.length} sudah ada, ${toDownload.length} perlu download, $skipped dilewati',
+    );
+
+    if (toDownload.isEmpty) {
+      return SyncAssetsResult(downloaded: 0, failed: 0, skipped: skipped);
+    }
+
+    // 3. Request URL dari server (batch)
+    int downloaded = 0;
+    int failed = 0;
+
+    try {
+      final response = await _dio.post(
+        'sync/assets',
+        data: {'filenames': toDownload},
+      );
+
+      if (response.data['status'] == 'success') {
+        final List assetList = response.data['data'] ?? [];
+
+        // FILTER DEFENSIVE: Mencegah I/O freeze akibat URL null
+        final availableAssets = assetList
+            .where(
+              (a) =>
+                  a['status'] == 'available' &&
+                  a['url'] != null &&
+                  a['url'].toString().isNotEmpty,
+            )
+            .toList();
+
+        // 4. Download satu per satu dengan retry (Hanya untuk aset valid)
+        for (final asset in availableAssets) {
+          final String filename = asset['filename'];
+          final String url = asset['url'];
+
+          bool success = await _downloadAssetWithRetry(
+            filename: filename,
+            url: url,
+            maxRetries: 3,
+          );
+
+          if (success) {
+            downloaded++;
+            debugPrint('✅ [$downloaded/${toDownload.length}] $filename');
+          } else {
+            failed++;
+            debugPrint('❌ Gagal download: $filename');
+          }
+        }
+
+        // Kalkulasikan sisa aset yang missing sebagai failed
+        failed += (assetList.length - availableAssets.length);
+      }
+    } on DioException catch (e) {
+      debugPrint('❌ Error sync assets: ${e.message}');
+      failed = toDownload.length;
+    }
+
+    print(
+      '📊 Sync Assets selesai: $downloaded berhasil, $failed gagal, $skipped dilewati',
+    );
+    return SyncAssetsResult(
+      downloaded: downloaded,
+      failed: failed,
+      skipped: skipped,
+    );
+  }
+
+  /// ✅ Helper: Download dengan retry logic
+  Future<bool> _downloadAssetWithRetry({
+    required String filename,
+    required String url,
+    int maxRetries = 3,
+  }) async {
+    int attempt = 0;
+
+    while (attempt < maxRetries) {
+      attempt++;
+      try {
+        final dir = await _localPath;
+        final savePath = '$dir/$filename';
+
+        // Cek file fisik sudah ada
+        if (await File(savePath).exists()) {
+          final fileSize = await File(savePath).length();
+          if (fileSize > 0) return true; // File valid, skip
+        }
+
+        await _dio.download(
+          url,
+          savePath,
+          onReceiveProgress: (received, total) {
+            if (total > 0) {
+              final percent = (received / total * 100).toStringAsFixed(0);
+              print('  ⬇️ $filename: $percent%');
+            }
+          },
+        );
+
+        if (await File(savePath).exists()) {
+          final fileSize = await File(savePath).length();
+          if (fileSize > 0) {
+            // Simpan ke DB
+            final db = await DatabaseHelper.instance.database;
+            await db.insert('downloaded_assets', {
+              'filename': filename,
+              'local_path': savePath,
+              'download_date': DateTime.now().toIso8601String(),
+              'file_size': fileSize,
+            }, conflictAlgorithm: ConflictAlgorithm.replace);
+            return true;
+          }
+        }
+      } on DioException catch (e) {
+        print('  ⚠️ Attempt $attempt/$maxRetries gagal: ${e.message}');
+        if (attempt < maxRetries) {
+          // Exponential backoff: 1s, 2s, 4s
+          await Future.delayed(Duration(seconds: pow(2, attempt - 1).toInt()));
+        }
+      }
+    }
+
+    return false;
   }
 
   /// --- LOGIC ASSETS ---
@@ -498,4 +773,99 @@ class SyncService {
       }
     }
   }
+
+  /// ✅ P7: Helper terpusat untuk simpan progress ke SQLite
+  /// Dipanggil dari semua QuizWidget setelah user menjawab
+  Future<void> saveProgress({
+    required int userId,
+    required int questionId,
+    required String templateType,
+    required dynamic
+    studentAnswer, // String atau Map/List untuk template kompleks
+    required bool isCorrect,
+    int? timeSpentSeconds,
+  }) async {
+    final db = await DatabaseHelper.instance.database;
+    final now = DateTime.now().toIso8601String();
+
+    // Serialize answer ke String untuk SQLite
+    String answerString;
+    if (studentAnswer is String) {
+      answerString = studentAnswer;
+    } else {
+      // Map atau List → encode ke JSON string
+      answerString = jsonEncode(studentAnswer);
+    }
+
+    // Cek apakah sudah ada jawaban benar sebelumnya
+    final existingCorrect = await db.query(
+      'student_progress',
+      where: 'user_id = ? AND question_id = ? AND is_correct = 1',
+      whereArgs: [userId, questionId],
+    );
+
+    // Jika sudah benar sebelumnya, jangan overwrite
+    if (existingCorrect.isNotEmpty) {
+      print('ℹ️ Soal $questionId sudah pernah dijawab benar, skip.');
+      return;
+    }
+
+    final existingAny = await db.query(
+      'student_progress',
+      where: 'user_id = ? AND question_id = ?',
+      whereArgs: [userId, questionId],
+    );
+
+    if (existingAny.isEmpty) {
+      // Insert baru
+      await db.insert('student_progress', {
+        'user_id': userId,
+        'question_id': questionId,
+        'student_answer': answerString,
+        'is_correct': isCorrect ? 1 : 0,
+        'time_spent_seconds': timeSpentSeconds ?? 0,
+        'answered_at': now,
+        'template_type': templateType,
+        'is_synced': 0,
+      });
+    } else if (isCorrect) {
+      // Update hanya jika jawaban sekarang benar
+      await db.update(
+        'student_progress',
+        {
+          'student_answer': answerString,
+          'is_correct': 1,
+          'time_spent_seconds': timeSpentSeconds ?? 0,
+          'answered_at': now,
+          'template_type': templateType,
+          'is_synced': 0,
+        },
+        where: 'user_id = ? AND question_id = ?',
+        whereArgs: [userId, questionId],
+      );
+    }
+
+    print(
+      '💾 Progress saved: Q$questionId | $templateType | ${isCorrect ? "✅" : "❌"}',
+    );
+  }
+}
+
+class SyncAssetsResult {
+  final int downloaded;
+  final int failed;
+  final int skipped;
+
+  const SyncAssetsResult({
+    required this.downloaded,
+    required this.failed,
+    required this.skipped,
+  });
+
+  bool get hasFailures => failed > 0;
+  int get total => downloaded + failed + skipped;
+
+  @override
+  String toString() =>
+      'SyncAssetsResult(downloaded: $downloaded, failed: $failed, skipped: $skipped)';
 }

@@ -936,12 +936,11 @@ class _QuizGridCard extends StatelessWidget {
                     child: Container(
                       decoration: BoxDecoration(
                         color: isCompleted ? kLime : kPurple,
-                        border: Border(
-                          right: BorderSide(
-                            color: kBlack,
-                            width: progress > 0 ? 1.0 : 0,
-                          ),
-                        ),
+                        border: progress > 0
+                            ? const Border(
+                                right: BorderSide(color: kBlack, width: 1.0),
+                              )
+                            : null,
                         borderRadius: const BorderRadius.horizontal(
                           left: Radius.circular(3),
                         ),

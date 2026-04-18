@@ -21,25 +21,37 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 2,
+      version: 3, // ← Naik dari 2 ke 3
       onCreate: _createDB,
-      onUpgrade: (db, oldVersion, newVersion) async {
-        if (oldVersion < 2) {
-          // Tambah kolom baru secara aman (Backward Compatible)
-          await db.execute('ALTER TABLE users ADD COLUMN image_url TEXT');
-          await db.execute(
-            'ALTER TABLE users ADD COLUMN local_image_path TEXT',
-          );
-          await db.execute(
-            'ALTER TABLE users ADD COLUMN is_synced INTEGER DEFAULT 1',
-          );
-        }
-      },
+      onUpgrade: _onUpgrade, // ← Pisahkan ke method sendiri
     );
   }
 
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await db.execute('ALTER TABLE users ADD COLUMN image_url TEXT');
+      await db.execute('ALTER TABLE users ADD COLUMN local_image_path TEXT');
+      await db.execute(
+        'ALTER TABLE users ADD COLUMN is_synced INTEGER DEFAULT 1',
+      );
+    }
+
+    if (oldVersion < 3) {
+      // ✅ P1: Tambah kolom baru ke questions (Fase 1 requirement)
+      await db.execute(
+        'ALTER TABLE questions ADD COLUMN template_type TEXT DEFAULT "multiple_choice"',
+      );
+      await db.execute('ALTER TABLE questions ADD COLUMN question_data TEXT');
+      await db.execute('ALTER TABLE questions ADD COLUMN assets_required TEXT');
+
+      // ✅ P7: Tambah kolom template_type ke student_progress
+      await db.execute(
+        'ALTER TABLE student_progress ADD COLUMN template_type TEXT DEFAULT "multiple_choice"',
+      );
+    }
+  }
+
   Future _createDB(Database db, int version) async {
-    // 1. Tabel User (Sudah oke, tapi mari rapikan ke snake_case agar konsisten kedepannya)
     await db.execute('''
     CREATE TABLE users (
       id INTEGER PRIMARY KEY,
@@ -56,7 +68,6 @@ class DatabaseHelper {
     )
   ''');
 
-    // 2. Tabel Materials (INI PENYEBAB ERROR local_image_path)
     await db.execute('''
     CREATE TABLE materials (
       id INTEGER PRIMARY KEY,
@@ -74,7 +85,6 @@ class DatabaseHelper {
     )
   ''');
 
-    // 3. Tabel Dictionary
     await db.execute('''
     CREATE TABLE dictionary (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -83,10 +93,7 @@ class DatabaseHelper {
       language_code TEXT
     )
   ''');
-    // Index opsional
-    // await db.execute('CREATE INDEX idx_dictionary_word ON dictionary(word_indo, language_code)');
 
-    // 4. Tabel Questions (INI PENYEBAB ERROR question_text_indo)
     await db.execute('''
     CREATE TABLE questions (
       id INTEGER PRIMARY KEY,
@@ -96,6 +103,9 @@ class DatabaseHelper {
       options_json TEXT,
       correct_answer_key TEXT,
       difficulty_weight INTEGER,
+      template_type TEXT DEFAULT 'multiple_choice',
+      question_data TEXT,
+      assets_required TEXT,
       updated_at TEXT,
       is_deleted INTEGER DEFAULT 0
     )
@@ -111,6 +121,7 @@ class DatabaseHelper {
       is_correct INTEGER,
       time_spent_seconds INTEGER,
       answered_at TEXT,
+      template_type TEXT DEFAULT 'multiple_choice',
       is_synced INTEGER DEFAULT 0
     )
   ''');

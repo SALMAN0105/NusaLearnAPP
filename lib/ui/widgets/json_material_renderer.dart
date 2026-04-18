@@ -24,11 +24,35 @@ class JsonMaterialRenderer extends StatelessWidget {
         final String activeLang = authProvider.activeLanguage;
 
         // Parsing JSON
+        // Parsing JSON Adaptif (Mendukung Legacy List & AI Map)
         List<dynamic> blocks = [];
         try {
-          blocks = jsonDecode(contentJson);
+          var decoded = jsonDecode(contentJson);
+
+          if (decoded is List) {
+            blocks = decoded; // Legacy Format
+          } else if (decoded is Map &&
+              decoded.containsKey('content_structured')) {
+            // AI Hybrid Format: Ekstrak semua chunks menjadi satu aliran UI
+            var sections = decoded['content_structured'];
+            if (sections is List) {
+              for (var sec in sections) {
+                // Opsional: Buat nama section menjadi sub-heading otomatis
+                if (sec['section'] != null &&
+                    sec['section'] != 'Konten Utama') {
+                  blocks.add({'type': 'heading', 'content': sec['section']});
+                }
+
+                if (sec['chunks'] is List) {
+                  blocks.addAll(sec['chunks']);
+                }
+              }
+            }
+          }
         } catch (e) {
-          return Center(child: Text("Format materi rusak: $e"));
+          return Center(
+            child: Text("Format materi rusak atau tidak dikenali: $e"),
+          );
         }
 
         return Column(

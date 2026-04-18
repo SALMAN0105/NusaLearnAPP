@@ -31,6 +31,8 @@ dependencies:
   permission_handler: ^11.0.0
   url_launcher: ^6.3.2
   http: ^1.6.0
+  audioplayers: ^6.6.0
+  lottie: ^3.3.3
 
 dev_dependencies:
   flutter_test:
@@ -44,6 +46,8 @@ flutter:
   assets:
     - assets/models/vocab.txt
     - assets/images/
+    - assets/audio/
+    - assets/animasi/
   #   - images/a_dot_burr.jpeg
   #   - images/a_dot_ham.jpeg
 
