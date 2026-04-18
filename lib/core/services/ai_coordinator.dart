@@ -150,7 +150,7 @@ class AICoordinator {
     final context = AIUtilityService.buildStructuredContext(kb);
 
     // Cek apakah input dalam bahasa daerah
-    final normalizedInput = _normalizeForOnline(input, kb, meta);
+    final normalizedInput = await _normalizeForOnline(input, kb, meta);
 
     final prompt =
         '''
@@ -186,11 +186,12 @@ $response
 📚 ${material.titleIndo} · 🌐 Powered by OpenAI · ✅ Berdasarkan Materi''';
   }
 
-  String _normalizeForOnline(
+  // ✅ FIX: Ubah return type menjadi Future<String> dan tambahkan async
+  Future<String> _normalizeForOnline(
     String input,
     KnowledgeBase kb,
     Map<String, dynamic> meta,
-  ) {
+  ) async {
     // Pivot bahasa daerah → Indonesia sebelum kirim ke cloud
     String normalized = input;
 
@@ -209,7 +210,8 @@ $response
 
     // Dari DictionaryService
     if (DictionaryService.instance.isLoaded) {
-      normalized = DictionaryService.instance.translateToIndo(normalized);
+      // ✅ FIX: Tambahkan await
+      normalized = await DictionaryService.instance.translateToIndo(normalized);
     }
 
     return normalized;

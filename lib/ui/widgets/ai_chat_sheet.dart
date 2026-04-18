@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -5,6 +6,8 @@ import 'package:nusalearn/core/services/voice_service.dart';
 import 'package:nusalearn/core/services/ai_coordinator.dart';
 import 'package:nusalearn/logic/providers/auth_provider.dart';
 import 'package:nusalearn/models/material_model.dart';
+import 'package:nusalearn/core/database/database_helper.dart';
+import 'package:nusalearn/core/services/sync_service.dart';
 
 // Gunakan konstanta yang sama di file ini jika terpisah
 const Color _kLime = Color(0xFFD2F945);
@@ -36,12 +39,16 @@ class _AiChatSheetState extends State<AiChatSheet> {
   bool _isThinking = false;
   bool _hasText = false;
   String _currentMode = 'offline';
+  bool _isModelReady = false;
+  bool _isDownloadingModel = false;
+  double _modelDownloadProgress = 0.0;
 
   @override
   void initState() {
     super.initState();
     _aiCoordinator = AICoordinator();
     _aiCoordinator.init();
+    _checkModelStatus();
 
     _aiCoordinator.onModeChanged = (bool isOnline) {
       if (mounted)
@@ -54,6 +61,87 @@ class _AiChatSheetState extends State<AiChatSheet> {
     });
 
     _checkAIReadiness();
+
+    //sementara
+    Future<void> _debugAiEmbeddings() async {
+      final db = await DatabaseHelper.instance.database;
+      final rows = await db.query(
+        'materials',
+        columns: ['id', 'ai_status', 'ai_embeddings'],
+        where: 'id = ?',
+        whereArgs: [widget.material.id],
+      );
+      if (rows.isEmpty) {
+        print('❌ Material tidak ada di DB');
+        return;
+      }
+
+      final row = rows.first;
+      print('📊 ai_status: ${row['ai_status']}');
+      print('📊 ai_embeddings null?: ${row['ai_embeddings'] == null}');
+      print(
+        '📊 ai_embeddings kosong?: ${(row['ai_embeddings'] as String?)?.isEmpty}',
+      );
+      print(
+        '📊 knowledgeBase.summary: "${widget.material.knowledgeBase.summary}"',
+      );
+    }
+  }
+
+  // GANTI _checkModelStatus() menjadi:
+  Future<void> _checkModelStatus() async {
+    final db = await DatabaseHelper.instance.database;
+    final result = await db.query(
+      'ai_model_registry',
+      where: 'is_ready = 1',
+      limit: 1,
+    );
+
+    bool ready = false;
+    if (result.isNotEmpty) {
+      final path = result.first['absolute_path'] as String?;
+      if (path != null && await File(path).exists()) {
+        ready = true;
+      } else {
+        // Registry stale — reset agar user bisa download ulang
+        await db.update('ai_model_registry', {'is_ready': 0});
+      }
+    }
+
+    if (mounted) setState(() => _isModelReady = ready);
+  }
+
+  Future<void> _startModelDownload() async {
+    setState(() {
+      _isDownloadingModel = true;
+      _modelDownloadProgress = 0.0;
+    });
+
+    // Panggil SyncService dengan callback onProgress
+    final success = await SyncService().syncAIModelAndData(
+      widget.material.id,
+      onProgress: (p) {
+        if (mounted) setState(() => _modelDownloadProgress = p);
+      },
+    );
+
+    if (mounted) {
+      setState(() {
+        _isDownloadingModel = false;
+        if (success) {
+          _isModelReady = true;
+        } else {
+          // Beri notifikasi ke siswa bahwa unduhan terjeda
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                "Koneksi terganggu. Klik download lagi untuk melanjutkan.",
+              ),
+            ),
+          );
+        }
+      });
+    }
   }
 
   void _checkAIReadiness() {
@@ -115,7 +203,6 @@ Silakan sync ulang untuk hasil optimal.''',
     _scrollToBottom();
 
     try {
-      if (widget.material == null) throw Exception("Material tidak tersedia");
       await Future.delayed(const Duration(milliseconds: 600));
 
       String aiResponse = await _aiCoordinator.processQuery(
@@ -205,7 +292,7 @@ Detail: ${e.toString()}''',
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
       decoration: const BoxDecoration(
-        color: Color(0xFFF4F0FF), // Pindahkan color ke dalam sini
+        color: Color(0xFFF4F0FF),
         borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
       ),
       child: Column(
@@ -219,8 +306,12 @@ Detail: ${e.toString()}''',
             ),
           ),
           const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+          // Baris Status & Tombol Download
+          Wrap(
+            alignment: WrapAlignment.center,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 12,
+            runSpacing: 8,
             children: [
               Text(
                 "Asisten AI",
@@ -230,11 +321,55 @@ Detail: ${e.toString()}''',
                   color: _kBlack,
                 ),
               ),
-              const SizedBox(width: 8),
               _buildModeIndicator(),
+
+              // 🧠 TOMBOL DOWNLOAD MODEL (OPT-IN DLC)
+              if (!_isModelReady)
+                GestureDetector(
+                  onTap: _isDownloadingModel ? null : _startModelDownload,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: _isDownloadingModel
+                          ? _kWhite
+                          : const Color(0xFFB3E5FF),
+                      border: Border.all(color: _kBlack, width: 1.5),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: _isDownloadingModel
+                          ? []
+                          : const [
+                              BoxShadow(color: _kBlack, offset: Offset(2, 2)),
+                            ],
+                    ),
+                    child: _isDownloadingModel
+                        ? SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              value: _modelDownloadProgress > 0
+                                  ? _modelDownloadProgress
+                                  : null,
+                              color: _kBlack,
+                            ),
+                          )
+                        : Text(
+                            "Download model Nusa-Edge 0.5B untuk menggunakan fitur tanya Ai offline",
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              color: _kBlack,
+                            ),
+                          ),
+                  ),
+                ),
             ],
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 8),
           Text(
             widget.material.titleIndo,
             style: GoogleFonts.plusJakartaSans(

@@ -30,16 +30,137 @@ class MaterialModel {
   });
 
   /// Getter: Parse ai_embeddings secara aman
+  // lib/models/material_model.dart
+
+  /// Getter: Parse ai_embeddings secara aman
+  /// ✅ FIX: Fallback ke content_json jika ai_embeddings null/kosong
   Map<String, dynamic> get aiMetadata {
-    if (aiEmbeddings == null || aiEmbeddings!.isEmpty) {
+    // Prioritas 1: ai_embeddings (data AI penuh dari backend)
+    if (aiEmbeddings != null && aiEmbeddings!.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(aiEmbeddings!);
+        return _toStringMap(decoded);
+      } catch (e) {
+        print('⚠️ [MaterialModel] Gagal parse ai_embeddings: $e');
+      }
+    }
+
+    // Prioritas 2: Bangun metadata minimal dari content_json
+    // Ini terjadi saat backend belum generate ai_embeddings (ai_status: pending)
+    return _buildFallbackMetadataFromContent();
+  }
+
+  /// ✅ BARU: Bangun KnowledgeBase minimal dari content_json mentah
+  Map<String, dynamic> _buildFallbackMetadataFromContent() {
+    if (contentJson.isEmpty) return _emptyMetadata();
+
+    try {
+      final decoded = jsonDecode(contentJson);
+
+      // Ekstrak semua teks dari node content untuk dijadikan summary fallback
+      final StringBuffer textBuffer = StringBuffer();
+
+      void extractText(dynamic node) {
+        if (node is String) {
+          textBuffer.write('$node ');
+        } else if (node is Map) {
+          // Node tipe paragraph/text
+          if (node['type'] == 'paragraph' || node['type'] == 'text') {
+            final content = node['content'] ?? node['text'] ?? '';
+            if (content is String && content.isNotEmpty) {
+              textBuffer.write('$content ');
+            }
+          }
+          // Rekursif ke children/items/chunks
+          for (final key in [
+            'children',
+            'items',
+            'chunks',
+            'content_structured',
+          ]) {
+            if (node[key] is List) {
+              for (final child in node[key]) {
+                extractText(child);
+              }
+            }
+          }
+        } else if (node is List) {
+          for (final item in node) {
+            extractText(item);
+          }
+        }
+      }
+
+      extractText(decoded);
+
+      final rawText = textBuffer.toString().trim();
+
+      // Buat summary dari 300 karakter pertama konten
+      final summary = rawText.length > 300
+          ? '${rawText.substring(0, 300)}...'
+          : rawText;
+
+      print(
+        '⚠️ [MaterialModel] ai_embeddings belum siap. '
+        'Menggunakan fallback content_json (${rawText.length} chars).',
+      );
+
+      return {
+        'schema_version': 'fallback_1.0',
+        'knowledge_base': {
+          'summary': summary.isEmpty ? 'Materi: $titleIndo' : summary,
+          'detailed_summary': rawText,
+          'concepts': [],
+          'glossary': [],
+          'key_facts': [],
+          'themes': [],
+        },
+        'qa_pairs': [],
+        'chunks': _buildChunksFromText(rawText),
+        'inverted_index': {},
+        'translation_hints': {},
+        'narrative_dataset': _emptyNarrativeDataset(),
+      };
+    } catch (e) {
+      print('⚠️ [MaterialModel] Gagal parse content_json untuk fallback: $e');
       return _emptyMetadata();
     }
-    try {
-      final decoded = jsonDecode(aiEmbeddings!);
-      return _toStringMap(decoded);
-    } catch (e) {
-      return {'error': 'Gagal parsing: $e', ..._emptyMetadata()};
+  }
+
+  /// ✅ BARU: Bagi teks panjang menjadi chunks untuk TF-IDF retrieval
+  List<Map<String, dynamic>> _buildChunksFromText(String text) {
+    if (text.isEmpty) return [];
+
+    // Bagi per kalimat (split by '. ' atau '\n')
+    final sentences = text
+        .split(RegExp(r'(?<=[.!?])\s+|\n+'))
+        .where((s) => s.trim().length > 10)
+        .toList();
+
+    // Kelompokkan per 3 kalimat jadi satu chunk
+    final chunks = <Map<String, dynamic>>[];
+    for (int i = 0; i < sentences.length; i += 3) {
+      final end = (i + 3 < sentences.length) ? i + 3 : sentences.length;
+      final chunkText = sentences.sublist(i, end).join(' ');
+
+      // Buat keyword sederhana dari kata-kata panjang
+      final keywords = chunkText
+          .toLowerCase()
+          .split(RegExp(r'\s+'))
+          .where((w) => w.length > 4)
+          .toSet()
+          .take(5)
+          .toList();
+
+      chunks.add({
+        'id': chunks.length,
+        'text': chunkText,
+        'keywords': keywords,
+        'tfidf': {},
+      });
     }
+
+    return chunks;
   }
 
   /// Getter: Narrative dataset (karakter, alur, tema)

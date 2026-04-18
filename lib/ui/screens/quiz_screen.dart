@@ -230,7 +230,7 @@ class _QuizScreenState extends State<QuizScreen> {
       listen: false,
     ).activeLanguage;
     if (activeLang == 'id') return text;
-    return DictionaryService().translate(text);
+    return DictionaryService.instance.translateSync(text);
   }
 
   // === UI BUILDERS ===

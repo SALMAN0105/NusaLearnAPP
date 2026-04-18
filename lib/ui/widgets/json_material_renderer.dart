@@ -65,7 +65,7 @@ class JsonMaterialRenderer extends StatelessWidget {
             // Sebelumnya selalu mentranslate tanpa cek bahasa aktif,
             // sehingga bahkan saat 'id' pun tetap masuk fungsi translate
             String translatedContent = (activeLang != 'id')
-                ? DictionaryService().translate(content)
+                ? DictionaryService.instance.translateSync(content)
                 : content;
 
             switch (type) {

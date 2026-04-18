@@ -309,39 +309,87 @@ class SyncService {
     }
   }
 
-  Future<void> syncAIModelAndData(int materialId) async {
+  // ── FASE 4: ENGINE MANAJEMEN DLC GGUF (MEMORY-SAFE) ──
+  // ── FASE 4.1: ENGINE MANAJEMEN DLC GGUF (RESUMABLE & MEMORY-SAFE) ──
+  Future<bool> syncAIModelAndData(
+    int materialId, {
+    Function(double)? onProgress,
+  }) async {
     final directory = await getApplicationDocumentsDirectory();
-    final modelFile = File('${directory.path}/mobilebert.tflite');
+    final modelFileName = 'qwen2.5-0.5b-instruct-q4_k_m.gguf';
+    final modelFile = File('${directory.path}/$modelFileName');
+    final db = await DatabaseHelper.instance.database;
 
-    // 1. Cek & Download Model Utama (Hanya jika belum ada di Lokal)
-    if (!await modelFile.exists()) {
-      print("📥 Mengunduh model AI utama ke local storage...");
-      final modelUrl =
-          "${ApiClient.baseUrl.replaceAll('/api/', '/storage/uploads/ai/')}mobilebert.tflite";
-      await _dio.download(modelUrl, modelFile.path);
-    }
-
-    // 2. Download Data Materi Spesifik (Hasil olahan Python Server)
-    print("📥 Mengunduh data cerdas untuk materi ID: $materialId");
-    final response = await _dio.get(
-      'sync/materials',
-      queryParameters: {'id': materialId},
+    // 1. Validasi Registry O(1)
+    final registryCheck = await db.query(
+      'ai_model_registry',
+      where: 'model_name = ? AND is_ready = 1',
+      whereArgs: [modelFileName],
     );
 
-    if (response.statusCode == 200) {
-      final materialData = response.data['data'];
+    if (registryCheck.isNotEmpty && await modelFile.exists()) {
+      print("⚡ [DLC ENGINE] Model GGUF sudah siap (Registry Verified).");
+      return true;
+    }
 
-      // Simpan data cerdas (ai_embeddings) ke SQLite lokal agar siap digunakan offline
-      final db = await DatabaseHelper.instance.database;
-      await db.update(
-        'materials',
-        {
-          'ai_embeddings': jsonEncode(materialData['ai_embeddings']),
-          'ai_status': 'ready',
+    // 2. Logika RESUME: Cek fragmentasi file di disk
+    int existingLength = 0;
+    if (await modelFile.exists()) {
+      existingLength = await modelFile.length();
+      print("📂 [DLC ENGINE] Resume unduhan dari byte: $existingLength");
+    }
+
+    final baseUrl = ApiClient.baseUrl;
+    final storageBase = baseUrl.contains('/api')
+        ? baseUrl.substring(0, baseUrl.indexOf('/api'))
+        : baseUrl.replaceAll(RegExp(r'/$'), '');
+    final modelUrl = '$storageBase/storage/models/$modelFileName';
+
+    try {
+      // 3. Eksekusi Download dengan Header RANGE (Standard RFC 7233)
+      await _dio.download(
+        modelUrl,
+        modelFile.path,
+        options: Options(
+          headers: {
+            'range': 'bytes=$existingLength-', // Request hanya sisa data
+          },
+        ),
+        deleteOnError:
+            false, // ⚠️ CRITICAL: Jangan hapus file jika error agar bisa lanjut nanti
+        onReceiveProgress: (received, total) {
+          if (total != -1) {
+            // Kalkulasi progres kumulatif (existing + current)
+            final actualTotal = total + existingLength;
+            final actualReceived = received + existingLength;
+            final progress = actualReceived / actualTotal;
+
+            if (onProgress != null) onProgress(progress);
+            print(
+              "⏳ [DLC ENGINE] Total Progress: ${(progress * 100).toStringAsFixed(1)}%",
+            );
+          }
         },
-        where: 'id = ?',
-        whereArgs: [materialId],
       );
+
+      // 4. Finalisasi & Registrasi
+      if (await modelFile.exists() && await modelFile.length() > 0) {
+        await db.insert('ai_model_registry', {
+          'id': 'qwen_05b_v1',
+          'model_name': modelFileName,
+          'absolute_path': modelFile.path,
+          'is_ready': 1,
+          'downloaded_at': DateTime.now().toIso8601String(),
+        }, conflictAlgorithm: ConflictAlgorithm.replace);
+        print("✅ [DLC ENGINE] Model GGUF diamankan sepenuhnya.");
+        return true;
+      }
+      return false;
+    } catch (e) {
+      print(
+        "❌ [DLC ENGINE] Koneksi terputus. Data parsial tetap aman di disk.",
+      );
+      return false;
     }
   }
 
@@ -620,7 +668,7 @@ class SyncService {
       }
 
       final baseUrl = ApiClient.baseUrl.replaceAll('/api/', '/storage/');
-      final fullUrl = '$baseUrl/$serverPath';
+      final fullUrl = '$baseUrl$serverPath';
 
       print('📥 Downloading: $fullUrl');
       await _dio.download(fullUrl, savePath);

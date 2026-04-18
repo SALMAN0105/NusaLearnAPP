@@ -750,7 +750,7 @@ class _NeoBrutalCard extends StatelessWidget {
     String? localPath = item['local_image_path'];
     bool hasLocalImage = localPath != null && File(localPath).existsSync();
 
-    String title = DictionaryService().translate(
+    String title = DictionaryService.instance.translateSync(
       item['title_indo'] ?? 'Tanpa Judul',
     );
     String category = (item['category'] ?? 'UMUM').toString().toUpperCase();

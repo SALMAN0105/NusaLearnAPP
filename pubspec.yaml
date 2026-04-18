@@ -33,6 +33,7 @@ dependencies:
   http: ^1.6.0
   audioplayers: ^6.6.0
   lottie: ^3.3.3
+  llama_cpp_dart: ^0.2.2
 
 dev_dependencies:
   flutter_test:

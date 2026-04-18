@@ -1,30 +1,61 @@
 // lib/core/services/local_ai_controller_services.dart
 import 'dart:math';
+import 'dart:io'; // Wajib untuk membaca path File absolut
+import 'package:nusalearn/core/database/database_helper.dart';
 import 'package:nusalearn/models/material_model.dart';
 import 'ai_utility_service.dart';
 import 'keyword_pivot_engine_services.dart';
 import 'dictionary_service.dart';
+import 'package:llama_cpp_dart/llama_cpp_dart.dart';
 
 class LocalAIControllerService {
+  static Map<String, dynamic> _safeMap(dynamic input) {
+    if (input == null) return {};
+    if (input is Map<String, dynamic>) return input;
+    if (input is Map) return input.map((k, v) => MapEntry(k.toString(), v));
+    print('⚠️ [LocalAI] Expected Map, got ${input.runtimeType}');
+    return {};
+  }
+
+  /// Safe cast ke List
+  static List _safeList(dynamic input) {
+    if (input == null) return [];
+    if (input is List) return input;
+    print('⚠️ [LocalAI] Expected List, got ${input.runtimeType}');
+    return [];
+  }
   // ═══════════════════════════════════════════
   // PUBLIC ENTRY POINT
   // ═══════════════════════════════════════════
+
+  // lib/core/services/local_ai_controller_services.dart
 
   Future<String> getResponse(String rawQuery, MaterialModel material) async {
     final kb = material.knowledgeBase;
     final meta = material.aiMetadata;
 
-    // Guard: data kosong
-    if (kb.summary.isEmpty && kb.concepts.isEmpty && kb.glossary.isEmpty) {
+    // ✅ FIX: Guard yang lebih informatif
+    // Cek apakah ada data APAPUN untuk dijawab
+    final bool hasAnyData =
+        kb.summary.isNotEmpty ||
+        kb.concepts.isNotEmpty ||
+        kb.glossary.isNotEmpty ||
+        _safeList(meta['chunks']).isNotEmpty;
+
+    if (!hasAnyData) {
+      // Benar-benar tidak ada data sama sekali
       return _buildNotReadyMessage();
     }
 
-    // 1. Normalisasi bahasa daerah → Indonesia
-    final normalizedQuery = _normalizeQuery(rawQuery, kb, meta);
-    print('🔄 Query: "$rawQuery" → "$normalizedQuery"');
+    // ✅ BARU: Informasikan ke user jika mode fallback aktif
+    final bool isFallbackMode = (meta['schema_version'] == 'fallback_1.0');
 
-    // 2. Pipeline RAG (urutan prioritas)
-    final result = await _runRagPipeline(
+    // Lanjutkan pipeline normal...
+    final normalizedQuery = await _normalizeQuery(rawQuery, kb, meta);
+    final bool isLocalLanguageUsed =
+        rawQuery.toLowerCase() != normalizedQuery.toLowerCase();
+
+    final ragResult = await _runRagPipeline(
       normalizedQuery,
       rawQuery,
       material,
@@ -32,33 +63,142 @@ class LocalAIControllerService {
       kb,
     );
 
-    // 3. Terjemahkan jawaban ke bahasa daerah jika perlu
-    final finalAnswer = _translateAnswerIfNeeded(result.answer, rawQuery, meta);
+    String llmGeneratedAnswer;
+    try {
+      llmGeneratedAnswer = await _generateWithLlama(
+        query: normalizedQuery,
+        contextText: ragResult.answer,
+        isLocalLanguageUsed: isLocalLanguageUsed,
+      );
+    } catch (e) {
+      print('⚠️ [LLM ENGINE] Fallback ke RAG murni. Error: $e');
+      llmGeneratedAnswer = ragResult.answer;
+    }
+
+    final finalAnswer = await _translateAnswerIfNeeded(
+      llmGeneratedAnswer,
+      rawQuery,
+      meta,
+    );
+
+    // ✅ Tambahkan disclaimer jika fallback mode
+    final suffix = isFallbackMode
+        ? '\n\n_⚠️ Data AI belum diproses penuh. Sync ulang untuk jawaban lebih akurat._'
+        : '';
 
     return _buildFormattedResponse(
-      answer: finalAnswer,
-      source: result.source,
-      confidence: result.confidence,
+      answer: finalAnswer + suffix,
+      source: ragResult.source,
+      confidence: isFallbackMode
+          ? ragResult.confidence *
+                0.7 // Turunkan confidence saat fallback
+          : ragResult.confidence,
       materialTitle: material.titleIndo,
     );
+  }
+
+  // ═══════════════════════════════════════════
+  // 🧠 ENGINE LLAMA.CPP INFERENCE
+  // ═══════════════════════════════════════════
+  Future<String> _generateWithLlama({
+    required String query,
+    required String contextText,
+    required bool isLocalLanguageUsed,
+  }) async {
+    final db = await DatabaseHelper.instance.database;
+
+    // 1. Pengecekan Registri & Validasi Path
+    final registry = await db.query(
+      'ai_model_registry',
+      where: 'is_ready = 1',
+      limit: 1,
+    );
+
+    if (registry.isEmpty) {
+      throw Exception("Model GGUF tidak ditemukan di registry.");
+    }
+
+    final String absolutePath = registry.first['absolute_path'] as String;
+    if (!await File(absolutePath).exists()) {
+      throw Exception("File fisik GGUF hilang dari disk.");
+    }
+
+    // 2. Penyusunan Prompt (Sistem ChatML Qwen)
+    String constraintInstruction = isLocalLanguageUsed
+        ? "JAWAB SANGAT SINGKAT. MAKSIMAL 2 KALIMAT. JANGAN BERTELE-TELE."
+        : "Jawab dengan bahasa Indonesia yang ramah, ringkas, dan jelas.";
+
+    final String prompt =
+        """<|im_start|>system
+Kamu adalah asisten AI NusaLearn. Tugasmu menjawab pertanyaan siswa murni berdasarkan KONTEKS MATERI yang diberikan.
+JANGAN mengarang informasi di luar konteks. Jika konteks tidak relevan, katakan 'Maaf, saya tidak menemukan jawabannya di materi ini.'
+$constraintInstruction
+
+KONTEKS MATERI:
+$contextText<|im_end|>
+<|im_start|>user
+$query<|im_end|>
+<|im_start|>assistant
+""";
+
+    print('⚙️ [LLM ENGINE] Memuat model ke RAM & Memulai inferensi...');
+
+    Llama? llama;
+    try {
+      // 3. Inisialisasi Model via FFI
+      llama = Llama(absolutePath);
+
+      // ✅ FIX: Gunakan setPrompt() + getNext() sesuai API llama_cpp_dart
+      llama.setPrompt(prompt);
+
+      // 4. Eksekusi Inferensi — stream token satu per satu
+      String generatedResponse = "";
+      final int maxTokens = isLocalLanguageUsed ? 100 : 300;
+      int tokenCount = 0;
+
+      while (tokenCount < maxTokens) {
+        final (token, isDone) = llama.getNext();
+        generatedResponse += token;
+        tokenCount++;
+        await Future.delayed(Duration.zero);
+
+        if (isDone) {
+          print('✅ [LLM ENGINE] Inferensi selesai (EOS).');
+          break;
+        }
+      }
+
+      if (tokenCount >= maxTokens) {
+        print('🛡️ [LLM ENGINE] Batas token tercapai. Memotong inferensi.');
+      }
+
+      // Pembersihan token syntax bawaan Qwen jika terikut
+      generatedResponse = generatedResponse.replaceAll('<|im_end|>', '').trim();
+
+      return generatedResponse.isEmpty ? contextText : generatedResponse;
+    } catch (e) {
+      print('❌ [LLM ENGINE] Inferensi Gagal/OOM: $e');
+      rethrow;
+    } finally {
+      // 5. 🧹 GARBAGE COLLECTION ABSOLUT (MISSION CRITICAL)
+      llama?.dispose();
+      print('🧹 [LLM ENGINE] Model dihancurkan dari RAM (Memory Freed).');
+    }
   }
 
   // ═══════════════════════════════════════════
   // STEP 1: NORMALISASI QUERY
   // ═══════════════════════════════════════════
 
-  String _normalizeQuery(
+  Future<String> _normalizeQuery(
     String query,
     KnowledgeBase kb,
     Map<String, dynamic> meta,
-  ) {
-    // a) Pivot bahasa daerah → Indo dari glossary materi
+  ) async {
     String result = KeywordPivotEngineService.process(query, kb.glossary);
 
-    // b) Pivot menggunakan translation_hints dari ai_embeddings
-    //    Format yang benar: {kata_lokal: kata_Indonesia}
-    //    Loop: forEach((local, indo) → ganti kata lokal dengan kata Indonesia
-    final hints = meta['translation_hints'] as Map<String, dynamic>? ?? {};
+    // ✅ _safeMap — tidak crash jika translation_hints berupa List atau null
+    final hints = _safeMap(meta['translation_hints']);
     if (hints.isNotEmpty) {
       hints.forEach((local, indo) {
         final pattern = RegExp(
@@ -69,9 +209,8 @@ class LocalAIControllerService {
       });
     }
 
-    // c) Pivot dari DictionaryService (kamus yang didownload)
     if (DictionaryService.instance.isLoaded) {
-      result = DictionaryService.instance.translateToIndo(result);
+      result = await DictionaryService.instance.translateToIndo(result);
     }
 
     return result;
@@ -124,9 +263,8 @@ class LocalAIControllerService {
 
     // ── Layer B: Summary query ────────────────────────────────────────
     if (_isAskingForSummary(query)) {
-      final summary =
-          (meta['knowledge_base']?['detailed_summary'] as String?) ??
-          kb.summary;
+      final kb2 = _safeMap(meta['knowledge_base']);
+      final summary = (kb2['detailed_summary'] as String?) ?? kb.summary;
       if (summary.isNotEmpty) {
         return _RagResult(
           answer: summary,
@@ -194,7 +332,7 @@ class LocalAIControllerService {
   // ═══════════════════════════════════════════
 
   _RagResult? _searchQAPairs(String query, Map<String, dynamic> meta) {
-    final qaPairs = meta['qa_pairs'] as List? ?? [];
+    final qaPairs = _safeList(meta['qa_pairs']); // ✅ _safeList
     if (qaPairs.isEmpty) return null;
 
     final queryTokens = _tokenize(query);
@@ -204,17 +342,14 @@ class LocalAIControllerService {
     double bestScore = 0.0;
 
     for (final qa in qaPairs) {
-      final qMap = qa as Map<String, dynamic>;
+      final qMap = _safeMap(qa); // ✅ _safeMap — tidak crash jika qa bukan Map
       final question = (qMap['question'] as String? ?? '').toLowerCase();
-      final keywords = (qMap['keywords'] as List? ?? [])
-          .map((k) => k.toString().toLowerCase())
-          .toSet();
+      final keywords = _safeList(
+        qMap['keywords'],
+      ).map((k) => k.toString().toLowerCase()).toSet();
 
       double score = 0.0;
-
-      if (question.contains(query.toLowerCase())) {
-        score += 15.0;
-      }
+      if (question.contains(query.toLowerCase())) score += 15.0;
 
       for (final kw in keywords) {
         if (query.toLowerCase().contains(kw)) score += 4.0;
@@ -243,11 +378,10 @@ class LocalAIControllerService {
 
     if (bestMatch == null || bestScore < 5.0) return null;
 
-    final confidence = (bestScore / 25.0).clamp(0.0, 1.0);
     return _RagResult(
       answer: bestMatch.answer,
       source: 'QA Materi',
-      confidence: confidence,
+      confidence: (bestScore / 25.0).clamp(0.0, 1.0),
     );
   }
 
@@ -255,26 +389,29 @@ class LocalAIControllerService {
   // LAYER A0: NARRATIVE DATASET SEARCH
   // ═══════════════════════════════════════════
 
+  // lib/core/services/local_ai_controller_services.dart
+
   _RagResult? _searchNarrativeDataset(String query, Map<String, dynamic> nd) {
     final queryLower = query.toLowerCase();
     final queryTokens = _tokenize(query);
+
+    // ✅ DEFENSIVE CAST — semua field pakai helper, tidak ada 'as' langsung
+    final characters = _safeList(nd['characters']);
+    final plot = _safeMap(nd['plot']); // ← plot bisa [] dari AI non-naratif
+    final themes = _safeList(nd['themes']);
+    final moralValues = _safeList(nd['moral_values']);
+    final narrativeQA = _safeList(nd['narrative_qa']);
 
     final isAskingAboutCharacter = _isCharacterQuery(queryLower);
     final isAskingAboutPlot = _isPlotQuery(queryLower);
     final isAskingAboutTheme = _isThemeQuery(queryLower);
 
-    final characters = nd['characters'] as List? ?? [];
-    final plot = nd['plot'] as Map<String, dynamic>? ?? {};
-    final themes = nd['themes'] as List? ?? [];
-    final moralValues = nd['moral_values'] as List? ?? [];
-    final narrativeQA = nd['narrative_qa'] as List? ?? [];
-
-    // --- 2. Daftar karakter ---
+    // --- Daftar semua karakter ---
     if (isAskingAboutCharacter && _isAskingListOfCharacters(queryLower)) {
       if (characters.isNotEmpty) {
         final charList = characters
             .map((c) {
-              final cm = c as Map<String, dynamic>;
+              final cm = _safeMap(c);
               final name = cm['name'] ?? '';
               final role = cm['role'] ?? '';
               final desc = cm['description'] ?? '';
@@ -289,16 +426,18 @@ class LocalAIControllerService {
       }
     }
 
-    // --- 3. Karakter tertentu ---
+    // --- Karakter tertentu ---
     if (isAskingAboutCharacter) {
       for (final c in characters) {
-        final cm = c as Map<String, dynamic>;
+        final cm = _safeMap(c);
         final name = (cm['name'] ?? '').toString().toLowerCase();
         final nameLocal = (cm['name_local'] ?? '').toString().toLowerCase();
         if (name.isNotEmpty &&
             (queryLower.contains(name) ||
                 (nameLocal.isNotEmpty && queryLower.contains(nameLocal)))) {
-          final traits = (cm['traits'] as List? ?? []).join(', ');
+          final traits = _safeList(
+            cm['traits'],
+          ).map((t) => t.toString()).join(', ');
           final desc = cm['description'] ?? '';
           final role = cm['role'] ?? '';
           String answer =
@@ -313,13 +452,14 @@ class LocalAIControllerService {
       }
     }
 
-    // --- 4. Alur / plot ---
+    // --- Alur / plot ---
+    // plot.isEmpty = true jika AI kirim [] atau {} → skip blok ini dengan aman
     if (isAskingAboutPlot && plot.isNotEmpty) {
-      final beginning = plot['beginning'] ?? '';
-      final conflict = plot['conflict'] ?? '';
-      final resolution = plot['resolution'] ?? '';
-      final settingPlace = plot['setting_place'] ?? '';
-      final settingTime = plot['setting_time'] ?? '';
+      final settingPlace = plot['setting_place']?.toString() ?? '';
+      final settingTime = plot['setting_time']?.toString() ?? '';
+      final beginning = plot['beginning']?.toString() ?? '';
+      final conflict = plot['conflict']?.toString() ?? '';
+      final resolution = plot['resolution']?.toString() ?? '';
 
       if (queryLower.contains('tempat') ||
           queryLower.contains('di mana') ||
@@ -327,12 +467,14 @@ class LocalAIControllerService {
         if (settingPlace.isNotEmpty) {
           return _RagResult(
             answer:
-                'Cerita ini berlatar di **$settingPlace**${settingTime.isNotEmpty ? ' pada **$settingTime**' : ''}.',
+                'Cerita ini berlatar di **$settingPlace'
+                '${settingTime.isNotEmpty ? '** pada **$settingTime' : ''}**.',
             source: 'Dataset Naratif',
             confidence: 0.90,
           );
         }
       }
+
       if (queryLower.contains('konflik') ||
           queryLower.contains('masalah') ||
           queryLower.contains('permasalahan')) {
@@ -344,16 +486,18 @@ class LocalAIControllerService {
           );
         }
       }
+
       if (beginning.isNotEmpty ||
           conflict.isNotEmpty ||
           resolution.isNotEmpty) {
-        String answer = '';
-        if (beginning.isNotEmpty) answer += '**Awal:** $beginning\n\n';
-        if (conflict.isNotEmpty) answer += '**Konflik:** $conflict\n\n';
-        if (resolution.isNotEmpty) answer += '**Penyelesaian:** $resolution';
+        final buf = StringBuffer();
+        if (beginning.isNotEmpty) buf.writeln('**Awal:** $beginning\n');
+        if (conflict.isNotEmpty) buf.writeln('**Konflik:** $conflict\n');
+        if (resolution.isNotEmpty) buf.write('**Penyelesaian:** $resolution');
+        final answer = buf.toString().trim();
         if (answer.isNotEmpty) {
           return _RagResult(
-            answer: answer.trim(),
+            answer: answer,
             source: 'Dataset Naratif',
             confidence: 0.88,
           );
@@ -361,37 +505,43 @@ class LocalAIControllerService {
       }
     }
 
-    // --- 5. Tema / nilai moral ---
+    // --- Tema / nilai moral ---
     if (isAskingAboutTheme) {
       if (themes.isNotEmpty || moralValues.isNotEmpty) {
-        String answer = '';
-        if (themes.isNotEmpty) answer += '**Tema:** ${themes.join(', ')}\n\n';
+        final buf = StringBuffer();
+        if (themes.isNotEmpty) {
+          buf.writeln(
+            '**Tema:** ${themes.map((t) => t.toString()).join(', ')}\n',
+          );
+        }
         if (moralValues.isNotEmpty) {
-          answer +=
-              '**Nilai moral/amanat:**\n${moralValues.map((v) => '• $v').join('\n')}';
+          buf.write(
+            '**Nilai moral/amanat:**\n'
+            '${moralValues.map((v) => '• $v').join('\n')}',
+          );
         }
         return _RagResult(
-          answer: answer.trim(),
+          answer: buf.toString().trim(),
           source: 'Dataset Naratif',
           confidence: 0.90,
         );
       }
     }
 
-    // --- 6. Fallback: narrative_qa ---
+    // --- Fallback: narrative_qa ---
     if (narrativeQA.isNotEmpty) {
       _QAMatch? bestMatch;
       double bestScore = 0.0;
 
       for (final qa in narrativeQA) {
-        final qMap = qa as Map<String, dynamic>;
+        final qMap = _safeMap(qa);
         final question = (qMap['question'] as String? ?? '').toLowerCase();
-        final keywords = (qMap['keywords'] as List? ?? [])
-            .map((k) => k.toString().toLowerCase())
-            .toSet();
-        final keywordsLocal = (qMap['keywords_local'] as List? ?? [])
-            .map((k) => k.toString().toLowerCase())
-            .toSet();
+        final keywords = _safeList(
+          qMap['keywords'],
+        ).map((k) => k.toString().toLowerCase()).toSet();
+        final keywordsLocal = _safeList(
+          qMap['keywords_local'],
+        ).map((k) => k.toString().toLowerCase()).toSet();
 
         double score = 0.0;
         if (question.contains(queryLower)) score += 15.0;
@@ -418,11 +568,10 @@ class LocalAIControllerService {
       }
 
       if (bestMatch != null && bestScore >= 4.0) {
-        final confidence = (bestScore / 25.0).clamp(0.0, 1.0);
         return _RagResult(
           answer: bestMatch.answer,
           source: 'Dataset Naratif',
-          confidence: confidence,
+          confidence: (bestScore / 25.0).clamp(0.0, 1.0),
         );
       }
     }
@@ -513,8 +662,9 @@ class LocalAIControllerService {
     Map<String, dynamic> meta,
     KnowledgeBase kb,
   ) {
-    final chunks = meta['chunks'] as List? ?? [];
-    final invertedIndex = meta['inverted_index'] as Map<String, dynamic>? ?? {};
+    // ✅ Semua akses meta pakai _safeList/_safeMap
+    final chunks = _safeList(meta['chunks']);
+    final invertedIndex = _safeMap(meta['inverted_index']);
 
     if (chunks.isEmpty) return null;
 
@@ -523,26 +673,20 @@ class LocalAIControllerService {
 
     final candidateIds = <int>{};
     for (final token in queryTokens) {
-      final ids = invertedIndex[token] as List?;
-      if (ids != null) {
-        for (final id in ids) {
-          candidateIds.add(id as int);
-        }
+      for (final id in _safeList(invertedIndex[token])) {
+        if (id is int) candidateIds.add(id);
       }
       for (final key in invertedIndex.keys) {
         if (key.contains(token) || token.contains(key)) {
-          final ids2 = invertedIndex[key] as List?;
-          if (ids2 != null) {
-            for (final id in ids2) candidateIds.add(id as int);
+          for (final id in _safeList(invertedIndex[key])) {
+            if (id is int) candidateIds.add(id);
           }
         }
       }
     }
 
     if (candidateIds.isEmpty) {
-      for (int i = 0; i < chunks.length; i++) {
-        candidateIds.add(i);
-      }
+      for (int i = 0; i < chunks.length; i++) candidateIds.add(i);
     }
 
     double bestScore = 0.0;
@@ -551,29 +695,28 @@ class LocalAIControllerService {
 
     for (final chunkId in candidateIds) {
       if (chunkId >= chunks.length) continue;
-      final chunk = chunks[chunkId] as Map<String, dynamic>;
+
+      // ✅ _safeMap — tidak crash meski chunk bukan Map
+      final chunk = _safeMap(chunks[chunkId]);
       final text = (chunk['text'] as String? ?? '').toLowerCase();
-      final chunkKeywords = (chunk['keywords'] as List? ?? [])
-          .map((k) => k.toString().toLowerCase())
-          .toList();
-      final tfidf = chunk['tfidf'] as Map<String, dynamic>? ?? {};
+      final chunkKeywords = _safeList(
+        chunk['keywords'],
+      ).map((k) => k.toString().toLowerCase()).toList();
+      final tfidf = _safeMap(chunk['tfidf']);
 
       double score = 0.0;
-
       for (final token in queryTokens) {
         if (text.contains(token)) {
           final tfidfScore = (tfidf[token] as num?)?.toDouble() ?? 0.0;
           score += 2.0 + tfidfScore * 5.0;
         }
       }
-
       for (final kw in chunkKeywords) {
         if (queryTokens.contains(kw)) score += 3.0;
         for (final token in queryTokens) {
           if (kw.contains(token) || token.contains(kw)) score += 1.5;
         }
       }
-
       for (final concept in kb.concepts) {
         final termLower = concept.term.toLowerCase();
         if (text.contains(termLower) &&
@@ -597,15 +740,14 @@ class LocalAIControllerService {
       i <= min(chunks.length - 1, bestChunkId + 1);
       i++
     ) {
-      final c = chunks[i] as Map<String, dynamic>;
+      final c = _safeMap(chunks[i]);
       final t = c['text'] as String? ?? '';
       if (t.isNotEmpty) contextParts.add(t);
     }
-    final fullContext = contextParts.join(' ');
 
     final confidence = (bestScore / 20.0).clamp(0.0, 0.90);
     return _RagResult(
-      answer: fullContext,
+      answer: contextParts.join(' '),
       source: 'Konten Materi',
       confidence: confidence,
     );
@@ -626,7 +768,7 @@ class LocalAIControllerService {
     final best = matches.first;
     if (best.score < 3.0) return null;
 
-    final conceptsV2 = (meta['knowledge_base']?['concepts'] as List? ?? []);
+    final conceptsV2 = _safeList(_safeMap(meta['knowledge_base'])['concepts']);
     final enhancedConcept = conceptsV2.firstWhere(
       (c) =>
           (c as Map<String, dynamic>)['term']?.toString().toLowerCase() ==
@@ -697,9 +839,8 @@ class LocalAIControllerService {
   // ═══════════════════════════════════════════
 
   _RagResult? _searchKeyFacts(String query, Map<String, dynamic> meta) {
-    final facts = (meta['knowledge_base']?['key_facts'] as List? ?? [])
-        .map((f) => f.toString())
-        .toList();
+    final kb2 = _safeMap(meta['knowledge_base']);
+    final facts = _safeList(kb2['key_facts']).map((f) => f.toString()).toList();
     if (facts.isEmpty) return null;
 
     final queryTokens = _tokenize(query);
@@ -722,18 +863,19 @@ class LocalAIControllerService {
   // ═══════════════════════════════════════════
   // STEP 3: BILINGUAL TRANSLATION
   // ═══════════════════════════════════════════
-
-  String _translateAnswerIfNeeded(
+  // ✅ FIX: Ubah return type menjadi Future<String> dan tambahkan async
+  Future<String> _translateAnswerIfNeeded(
     String answer,
     String originalQuery,
     Map<String, dynamic> meta,
-  ) {
+  ) async {
     final langCode = meta['language_code'] as String? ?? 'id';
     if (langCode == 'id' || langCode == 'global') return answer;
 
     if (!DictionaryService.instance.isLoaded) return answer;
 
-    return DictionaryService.instance.translateToLocal(answer);
+    // ✅ FIX: Tambahkan await
+    return await DictionaryService.instance.translateToLocal(answer);
   }
 
   // ═══════════════════════════════════════════

@@ -21,131 +21,143 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 3, // ← Naik dari 2 ke 3
+      version:
+          1, // Reset ke versi 1 karena fresh install — semua sudah di _createDB
       onCreate: _createDB,
-      onUpgrade: _onUpgrade, // ← Pisahkan ke method sendiri
     );
   }
 
-  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    if (oldVersion < 2) {
-      await db.execute('ALTER TABLE users ADD COLUMN image_url TEXT');
-      await db.execute('ALTER TABLE users ADD COLUMN local_image_path TEXT');
-      await db.execute(
-        'ALTER TABLE users ADD COLUMN is_synced INTEGER DEFAULT 1',
-      );
-    }
-
-    if (oldVersion < 3) {
-      // ✅ P1: Tambah kolom baru ke questions (Fase 1 requirement)
-      await db.execute(
-        'ALTER TABLE questions ADD COLUMN template_type TEXT DEFAULT "multiple_choice"',
-      );
-      await db.execute('ALTER TABLE questions ADD COLUMN question_data TEXT');
-      await db.execute('ALTER TABLE questions ADD COLUMN assets_required TEXT');
-
-      // ✅ P7: Tambah kolom template_type ke student_progress
-      await db.execute(
-        'ALTER TABLE student_progress ADD COLUMN template_type TEXT DEFAULT "multiple_choice"',
-      );
-    }
-  }
-
+  /// ✅ MASTER CREATE: Semua tabel dari v1-v4 digabung di sini.
+  /// Tidak ada _onUpgrade karena ini fresh install dengan versi tunggal.
+  /// LARANGAN: Jangan pernah rename kolom/field yang sudah ada.
   Future _createDB(Database db, int version) async {
+    // ─── 1. TABEL USERS (mencakup kolom upgrade v2) ───────────────────
     await db.execute('''
-    CREATE TABLE users (
-      id INTEGER PRIMARY KEY,
-      name TEXT,
-      username TEXT,
-      token TEXT,
-      school_origin TEXT,
-      language_code TEXT,
-      postal_code TEXT,
-      last_sync TEXT,
-      image_url TEXT,
-      local_image_path TEXT,
-      is_synced INTEGER DEFAULT 1
-    )
-  ''');
+      CREATE TABLE users (
+        id INTEGER PRIMARY KEY,
+        name TEXT,
+        username TEXT,
+        token TEXT,
+        school_origin TEXT,
+        language_code TEXT,
+        postal_code TEXT,
+        last_sync TEXT,
+        image_url TEXT,
+        local_image_path TEXT,
+        is_synced INTEGER DEFAULT 1
+      )
+    ''');
 
+    // ─── 2. TABEL MATERIALS ───────────────────────────────────────────
     await db.execute('''
-    CREATE TABLE materials (
-      id INTEGER PRIMARY KEY,
-      title_indo TEXT,
-      category TEXT,
-      image_url TEXT,
-      local_image_path TEXT,
-      level_difficulty INTEGER,
-      language_code TEXT,
-      content_json TEXT,
-      updated_at TEXT,
-      is_deleted INTEGER DEFAULT 0,
-      ai_embeddings TEXT, 
-      ai_status TEXT DEFAULT 'pending'
-    )
-  ''');
+      CREATE TABLE materials (
+        id INTEGER PRIMARY KEY,
+        title_indo TEXT,
+        category TEXT,
+        image_url TEXT,
+        local_image_path TEXT,
+        level_difficulty INTEGER,
+        language_code TEXT,
+        content_json TEXT,
+        updated_at TEXT,
+        is_deleted INTEGER DEFAULT 0,
+        ai_embeddings TEXT,
+        ai_status TEXT DEFAULT 'pending'
+      )
+    ''');
 
+    // ─── 3. TABEL DICTIONARY ──────────────────────────────────────────
     await db.execute('''
-    CREATE TABLE dictionary (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      word_indo TEXT,
-      word_tolaki TEXT,
-      language_code TEXT
-    )
-  ''');
+      CREATE TABLE dictionary (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        word_indo TEXT,
+        word_tolaki TEXT,
+        language_code TEXT
+      )
+    ''');
 
+    // ─── 4. TABEL QUESTIONS (mencakup kolom upgrade v3) ──────────────
     await db.execute('''
-    CREATE TABLE questions (
-      id INTEGER PRIMARY KEY,
-      material_id INTEGER,
-      question_text_indo TEXT,
-      question_text_tolaki TEXT,
-      options_json TEXT,
-      correct_answer_key TEXT,
-      difficulty_weight INTEGER,
-      template_type TEXT DEFAULT 'multiple_choice',
-      question_data TEXT,
-      assets_required TEXT,
-      updated_at TEXT,
-      is_deleted INTEGER DEFAULT 0
-    )
-  ''');
+      CREATE TABLE questions (
+        id INTEGER PRIMARY KEY,
+        material_id INTEGER,
+        question_text_indo TEXT,
+        question_text_tolaki TEXT,
+        options_json TEXT,
+        correct_answer_key TEXT,
+        difficulty_weight INTEGER,
+        template_type TEXT DEFAULT 'multiple_choice',
+        question_data TEXT,
+        assets_required TEXT,
+        updated_at TEXT,
+        is_deleted INTEGER DEFAULT 0
+      )
+    ''');
 
-    // 5. Tabel Progress
+    // ─── 5. TABEL STUDENT PROGRESS (mencakup kolom upgrade v3) ───────
     await db.execute('''
-    CREATE TABLE student_progress (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER,
-      question_id INTEGER,
-      student_answer TEXT,
-      is_correct INTEGER,
-      time_spent_seconds INTEGER,
-      answered_at TEXT,
-      template_type TEXT DEFAULT 'multiple_choice',
-      is_synced INTEGER DEFAULT 0
-    )
-  ''');
+      CREATE TABLE student_progress (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        question_id INTEGER,
+        student_answer TEXT,
+        is_correct INTEGER,
+        time_spent_seconds INTEGER,
+        answered_at TEXT,
+        template_type TEXT DEFAULT 'multiple_choice',
+        is_synced INTEGER DEFAULT 0
+      )
+    ''');
 
-    // 6. Tabel Recent Materials
+    // ─── 6. TABEL RECENT MATERIALS ────────────────────────────────────
     await db.execute('''
-    CREATE TABLE recent_materials (
-      user_id INTEGER,
-      material_id INTEGER,
-      last_accessed TEXT,
-      PRIMARY KEY (user_id, material_id)
-    )
-  ''');
+      CREATE TABLE recent_materials (
+        user_id INTEGER,
+        material_id INTEGER,
+        last_accessed TEXT,
+        PRIMARY KEY (user_id, material_id)
+      )
+    ''');
 
-    // 7. Tabel Downloaded Assets
+    // ─── 7. TABEL DOWNLOADED ASSETS ──────────────────────────────────
     await db.execute('''
-    CREATE TABLE downloaded_assets (
-      filename TEXT PRIMARY KEY,
-      local_path TEXT,
-      download_date TEXT,
-      file_size INTEGER
-    )
-  ''');
+      CREATE TABLE downloaded_assets (
+        filename TEXT PRIMARY KEY,
+        local_path TEXT,
+        download_date TEXT,
+        file_size INTEGER
+      )
+    ''');
+
+    // ─── 8. TABEL AI MODEL REGISTRY (dari upgrade v4) ────────────────
+    // Memory-Safe: Hanya menyimpan absolute_path STRING, DILARANG BLOB
+    await db.execute('''
+      CREATE TABLE ai_model_registry (
+        id TEXT PRIMARY KEY,
+        model_name TEXT NOT NULL,
+        absolute_path TEXT,
+        is_ready INTEGER NOT NULL DEFAULT 0,
+        checksum TEXT,
+        downloaded_at TEXT
+      )
+    ''');
+
+    // ─── 9. B-TREE INDEX untuk Dictionary (dari upgrade v4) ──────────
+    // Mencegah Table Scan O(N) → O(log M)
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_dict_tolaki ON dictionary(word_tolaki)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_dict_indo ON dictionary(word_indo)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_dict_lang ON dictionary(language_code)',
+    );
   }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // UTILITY FUNCTIONS
+  // ─────────────────────────────────────────────────────────────────────
 
   Future<void> deleteDB() async {
     final dbPath = await getDatabasesPath();
@@ -154,7 +166,7 @@ class DatabaseHelper {
     _database = null;
   }
 
-  /// ✅ FUNGSI DEBUG: Cek isi database
+  /// Debug: Cek isi database
   Future<void> printDatabaseStats() async {
     final db = await database;
 
@@ -177,48 +189,42 @@ class DatabaseHelper {
     print("   Questions: $questionCount");
     print("   Downloaded Assets: $assetCount");
 
-    // Cek file kamus
     final dir = await getApplicationDocumentsDirectory();
     final files = await Directory(dir.path).list().toList();
     final dictFiles = files.where((f) => f.path.endsWith('.json')).toList();
     print("   Dictionary Files: ${dictFiles.length}");
   }
 
-  /// ✅ FUNGSI BARU: Cek kesiapan offline
+  /// Cek kesiapan offline
   Future<Map<String, dynamic>> checkOfflineReadiness() async {
     final db = await database;
 
-    // Count data
     final userCount =
         Sqflite.firstIntValue(
           await db.rawQuery('SELECT COUNT(*) FROM users'),
         ) ??
         0;
-
     final materialCount =
         Sqflite.firstIntValue(
           await db.rawQuery('SELECT COUNT(*) FROM materials'),
         ) ??
         0;
-
     final questionCount =
         Sqflite.firstIntValue(
           await db.rawQuery('SELECT COUNT(*) FROM questions'),
         ) ??
         0;
-
     final assetCount =
         Sqflite.firstIntValue(
           await db.rawQuery('SELECT COUNT(*) FROM downloaded_assets'),
         ) ??
         0;
 
-    // Cek kamus
     final dir = await getApplicationDocumentsDirectory();
     final files = await Directory(dir.path).list().toList();
     final dictFiles = files.where((f) => f.path.endsWith('.json')).toList();
 
-    bool isReady =
+    final bool isReady =
         userCount > 0 &&
         materialCount > 0 &&
         questionCount > 0 &&
@@ -234,8 +240,7 @@ class DatabaseHelper {
     };
   }
 
-  /// ✅ FUNGSI BARU: Get local path untuk asset
-  /// ✅ FUNGSI BARU: Get local path untuk asset
+  /// Get local path untuk asset — dengan validasi file fisik
   Future<String?> getAssetLocalPath(String filename) async {
     final db = await database;
     final result = await db.query(
@@ -245,12 +250,11 @@ class DatabaseHelper {
     );
 
     if (result.isNotEmpty) {
-      // ✅ FIX: Gunakan ['local_path'], BUKAN ['localpath']
-      String localPath = result.first['local_path'] as String;
-
+      final String localPath = result.first['local_path'] as String;
       if (await File(localPath).exists()) {
         return localPath;
       } else {
+        // File fisik sudah hilang — hapus record stale dari DB
         await db.delete(
           'downloaded_assets',
           where: 'filename = ?',
