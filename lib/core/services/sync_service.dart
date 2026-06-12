@@ -806,8 +806,8 @@ class SyncService {
       }
 
       print('📥 Downloading Asset: $fileName');
-      // Pastikan URL storage benar
-      final baseUrl = ApiClient.baseUrl.replaceAll('/api/', '/storage/');
+      // Pastikan URL storage benar menggunakan route aset
+      final baseUrl = ApiClient.baseUrl.replaceAll('/api/', '/assets/serve/');
       final fullUrl = '$baseUrl$fileName';
 
       await _dio.download(fullUrl, savePath);
