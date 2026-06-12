@@ -16,11 +16,9 @@ class DictionaryService {
   bool isLoaded = false;
   String _activeLang = 'id';
 
-  // ✅ HOT CACHE: Terbatas hanya untuk translate() sync (UI layer)
-  // Diisi saat loadDictionary() selesai — O(1) lookup, batas 2000 entri
-  // sesuai constraint RAM low-end blueprint Nusa-Edge 0.5B
-  static const int _kMaxCacheEntries = 2000;
+  // ✅ HOT CACHE: Memuat seluruh entri secara langsung di RAM
   final Map<String, String> _syncCache = {};
+  List<String> _sortedKeys = [];
 
   // ─────────────────────────────────────────
   // DOWNLOAD
@@ -146,12 +144,9 @@ class DictionaryService {
           });
 
           // Isi cache (Keduanya dimasukkan untuk menjamin lookup translateSync berhasil)
-          if (_syncCache.length < _kMaxCacheEntries) {
-            _syncCache[indo] = local;
-            if (_syncCache.length < _kMaxCacheEntries) {
-              _syncCache[local] = indo; 
-            }
-          }
+          // Menghapus batasan O(1) 2000 entri agar seluruh frasa bisa dimuat dan ditranslasi
+          _syncCache[indo] = local;
+          _syncCache[local] = indo; 
           count++;
         }
 
@@ -174,6 +169,9 @@ class DictionaryService {
 
       _activeLang = kodeBahasa;
       isLoaded = true;
+      // Sort keys descending by length so phrases matched before single words
+      _sortedKeys = _syncCache.keys.toList()..sort((a, b) => b.length.compareTo(a.length));
+      
       debugPrint("✅ Kamus $kodeBahasa dimuat: ${_syncCache.length} entri di cache (Bi-directional).");
       return true;
     } catch (e) {
@@ -252,44 +250,36 @@ class DictionaryService {
     }).join(' ');
   }
 
-  // ✅ SYNC translate — untuk UI layer (PATCHED: PRESERVE PUNCTUATION & CASE)
+  // ✅ SYNC translate — untuk UI layer & Material (PHRASE-AWARE TRANSLATION)
   String translateSync(String text) {
     if (!isLoaded || _activeLang == 'id' || _syncCache.isEmpty) return text;
 
     try {
-      final regex = RegExp(r"(\w+)|([^\w]+)");
-      final matches = regex.allMatches(text);
+      String result = text;
       
-      if (matches.isEmpty) return text;
-
-      final result = StringBuffer();
-      for (final match in matches) {
-        final part = match.group(0)!;
-        
-        if (RegExp(r"^\w+$").hasMatch(part)) {
-          final clean = part.toLowerCase();
-          final translated = _syncCache[clean];
-          
-          if (translated != null) {
-            // Preservasi Capitalization sederhana
-            if (part.length > 0 && part[0] == part[0].toUpperCase()) {
+      for (String key in _sortedKeys) {
+        // Fast-path: hanya proses RegExp jika text mengandung key (case-insensitive)
+        if (result.toLowerCase().contains(key)) {
+          final translated = _syncCache[key]!;
+          // Ganti kata/frasa lengkap yang diapit boundary \b (case-insensitive)
+          result = result.replaceAllMapped(
+              RegExp(r'\b' + RegExp.escape(key) + r'\b', caseSensitive: false), 
+              (match) {
+            String original = match.group(0)!;
+            // Preservasi Capitalization
+            if (original.isNotEmpty && original[0] == original[0].toUpperCase()) {
               if (translated.length > 1) {
-                result.write(translated[0].toUpperCase() + translated.substring(1));
+                return translated[0].toUpperCase() + translated.substring(1);
               } else {
-                result.write(translated.toUpperCase());
+                return translated.toUpperCase();
               }
-            } else {
-              result.write(translated);
             }
-          } else {
-            result.write(part);
-          }
-        } else {
-          result.write(part);
+            return translated;
+          });
         }
       }
 
-      return result.toString();
+      return result;
     } catch (e) {
       return text;
     }
