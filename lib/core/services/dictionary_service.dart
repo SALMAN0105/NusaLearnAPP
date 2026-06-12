@@ -124,18 +124,9 @@ class DictionaryService {
           final s2 = v.toString().toLowerCase().trim();
           if (s1.isEmpty || s2.isEmpty) return;
 
-          // INTELLIGENT HEURISTIC: Tentukan mana yang Indonesia
-          final commonIndo = {'home', 'materi', 'profil', 'kuis', 'beranda', 'belajar', 'numerasi', 'literasi', 'hapus', 'batal'};
-          
-          String indo, local;
-          if (commonIndo.contains(s1)) {
-            indo = s1; local = s2;
-          } else if (commonIndo.contains(s2)) {
-            indo = s2; local = s1;
-          } else {
-            // Default: local=key, indo=value. Tapi isi cache bi-directional agar aman
-            local = s1; indo = s2;
-          }
+          // JSON Format dari API Backend: Key = Indo, Value = Local
+          String indo = s1;
+          String local = s2;
 
           batch.insert('dictionary', {
             'word_indo': indo,
@@ -143,10 +134,9 @@ class DictionaryService {
             'kode_bahasa': kodeBahasa,
           });
 
-          // Isi cache (Keduanya dimasukkan untuk menjamin lookup translateSync berhasil)
-          // Menghapus batasan O(1) 2000 entri agar seluruh frasa bisa dimuat dan ditranslasi
+          // Hanya muat mapping Indo -> Tolaki untuk mencegah re-translation beruntun 
+          // yang membuat hasil akhir kembali ke bahasa Indonesia.
           _syncCache[indo] = local;
-          _syncCache[local] = indo; 
           count++;
         }
 
