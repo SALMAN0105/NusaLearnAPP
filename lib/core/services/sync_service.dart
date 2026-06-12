@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 import 'package:dio/dio.dart';
+import 'package:dio/io.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:nusalearn/core/api/api_client.dart';
 import 'package:nusalearn/core/database/database_helper.dart';
@@ -19,7 +20,7 @@ class SyncService {
   }
 
   /// --- MASTER SYNC: Upload dulu, baru Download ---
-  Future<void> syncAll(String languageCode, {bool force = false}) async {
+  Future<void> syncAll(String kodeBahasa, {bool force = false}) async {
     print('🔄 MULAI FULL SYNC... (Force: $force)');
 
     // 1. Upload Data Siswa (Progress) ke Server
@@ -27,17 +28,38 @@ class SyncService {
 
     // 2. Download Data Baru dari Server
     bool dictSuccess = await DictionaryService.instance.downloadDictionary(
-      languageCode,
+      kodeBahasa,
     );
 
     if (!dictSuccess) {
       print('⚠️ SYNC: Gagal download kamus, lanjutkan sync lainnya');
     }
 
-    await syncMaterials(force: force);
-    await syncQuestions(force: force);
+    String? newServerTime;
+
+    String? timeMateri = await syncMaterials(force: force);
+    String? timeSoal = await syncQuestions(force: force);
+
+    // Ambil waktu dari salah satu (biasanya sama karena ditarik bersamaan)
+    newServerTime = timeMateri ?? timeSoal;
 
     await _syncAllRequiredAssets();
+
+    // Update last sync user SETELAH SEMUA BERHASIL
+    if (newServerTime != null) {
+      final db = await DatabaseHelper.instance.database;
+      final user = (await db.query('pengguna', limit: 1)).isNotEmpty
+          ? (await db.query('pengguna', limit: 1)).first
+          : null;
+      if (user != null) {
+        await db.update(
+          'pengguna',
+          {'last_sync': newServerTime},
+          where: 'id = ?',
+          whereArgs: [user['id']],
+        );
+      }
+    }
 
     print('✅ FULL SYNC SELESAI.');
   }
@@ -46,23 +68,23 @@ class SyncService {
     try {
       final db = await DatabaseHelper.instance.database;
 
-      // Ambil semua assets_required dari questions
+      // Ambil semua aset_diperlukan dari questions
       final questions = await db.query(
-        'questions',
-        columns: ['assets_required'],
-        where: 'assets_required IS NOT NULL AND is_deleted = 0',
+        'soal',
+        columns: ['aset_diperlukan'],
+        where: 'aset_diperlukan IS NOT NULL AND is_deleted = 0',
       );
 
       // Kumpulkan semua filename unik
       final Set<String> allFilenames = {};
       for (final q in questions) {
-        final raw = q['assets_required'] as String?;
+        final raw = q['aset_diperlukan'] as String?;
         if (raw != null && raw.isNotEmpty) {
           try {
             final List decoded = jsonDecode(raw);
             allFilenames.addAll(decoded.map((e) => e.toString()));
           } catch (e) {
-            print('⚠️ Gagal parse assets_required: $raw');
+            print('⚠️ Gagal parse aset_diperlukan: $raw');
           }
         }
       }
@@ -86,8 +108,8 @@ class SyncService {
   Future<void> syncUpProgress() async {
     final db = await DatabaseHelper.instance.database;
     final unsyncedData = await db.query(
-      'student_progress',
-      where: 'is_synced = 0',
+      'progres_siswa',
+      where: 'sinkron = 0',
     );
 
     if (unsyncedData.isEmpty) {
@@ -99,42 +121,59 @@ class SyncService {
 
     try {
       List<Map<String, dynamic>> payload = unsyncedData.map((e) {
-        final templateType = e['template_type'] as String? ?? 'multiple_choice';
-        final rawAnswer = e['student_answer'] as String? ?? '';
+        final tipeTemplate = e['tipe_template'] as String? ?? 'multiple_choice';
+        final rawAnswer = e['jawaban_siswa'] as String? ?? '';
 
         // ✅ P7: Decode JSON answer untuk template kompleks
-        dynamic studentAnswer;
-        switch (templateType) {
+        dynamic jawabanSiswa;
+        switch (tipeTemplate) {
           case 'drag_and_drop':
           case 'matching_game':
           case 'image_quiz':
             // Coba decode sebagai JSON
             try {
-              studentAnswer = jsonDecode(rawAnswer);
+              jawabanSiswa = jsonDecode(rawAnswer);
             } catch (_) {
-              studentAnswer = rawAnswer; // fallback ke string
+              jawabanSiswa = rawAnswer; // fallback ke string
             }
             break;
           case 'multiple_choice':
           case 'fill_blank':
           default:
-            studentAnswer = rawAnswer; // String biasa
+            jawabanSiswa = rawAnswer; // String biasa
             break;
         }
 
         return {
-          'question_id': e['question_id'],
-          'student_answer': studentAnswer,
-          'is_correct': e['is_correct'] == 1,
-          'time_spent_seconds': e['time_spent_seconds'] ?? 0,
-          'answered_at': e['answered_at'],
-          'template_type': templateType, // ✅ P7: Kirim template_type
+          'soal_id': e['soal_id'],
+          'data_jawaban': jawabanSiswa,
+          'benar': e['benar'] == 1,
+          'waktu_detik': e['waktu_detik'] ?? 0,
+          'dijawab_pada': e['dijawab_pada'],
+          'tipe_template': tipeTemplate, // ✅ P7: Kirim tipe_template
         };
       }).toList();
 
+      // ✅ FIX 422: Filter defensif — buang item yang soal_id-nya null
+      // atau data_jawaban-nya kosong agar server tidak mengembalikan 422.
+      payload = payload.where((item) {
+        final qId = item['soal_id'];
+        final ans = item['data_jawaban'];
+        final isAnswerPresent = ans != null &&
+            !(ans is String && (ans as String).isEmpty) &&
+            !(ans is List && (ans as List).isEmpty) &&
+            !(ans is Map && (ans as Map).isEmpty);
+        return qId != null && isAnswerPresent;
+      }).toList();
+
+      if (payload.isEmpty) {
+        print('⚠️ syncUpProgress: Semua item difilter (soal_id/answer null). Upload dibatalkan.');
+        return;
+      }
+
       final response = await _dio.post(
         'sync/progress',
-        data: {'progress': payload},
+        data: {'answers': payload},
       );
 
       if (response.data['status'] == 'success') {
@@ -146,8 +185,8 @@ class SyncService {
         final batch = db.batch();
         for (var item in unsyncedData) {
           batch.update(
-            'student_progress',
-            {'is_synced': 1},
+            'progres_siswa',
+            {'sinkron': 1},
             where: 'id = ?',
             whereArgs: [item['id']],
           );
@@ -174,11 +213,43 @@ class SyncService {
     }
   }
 
+  /// --- BARU: SYNC DOWN (Download Progress Belajar saat login) ---
+  Future<void> syncDownProgress() async {
+    try {
+      final response = await _dio.get('sync/progress');
+      if (response.data['status'] == 'success') {
+        List data = response.data['data'];
+        final db = await DatabaseHelper.instance.database;
+        final userList = await db.query('pengguna', limit: 1);
+        if (userList.isEmpty) return;
+        int penggunaId = userList.first['id'] as int;
+
+        final batch = db.batch();
+        for (var item in data) {
+          batch.insert('progres_siswa', {
+            'pengguna_id': penggunaId,
+            'soal_id': item['soal_id'],
+            'jawaban_siswa': item['data_jawaban']?.toString() ?? '',
+            'benar': (item['benar'] == true || item['benar'] == 1) ? 1 : 0,
+            'waktu_detik': item['waktu_detik'] ?? 0,
+            'dijawab_pada': item['dijawab_pada'] ?? DateTime.now().toIso8601String(),
+            'tipe_template': item['tipe_template'] ?? 'multiple_choice',
+            'sinkron': 1, // Sudah sinkron
+          }, conflictAlgorithm: ConflictAlgorithm.replace);
+        }
+        await batch.commit(noResult: true);
+        print('✅ SYNC: Downloaded ${data.length} progress data');
+      }
+    } catch (e) {
+      print('❌ Error Sync Down Progress: $e');
+    }
+  }
+
   /// --- SYNC MATERI (Delta Sync dengan parameter force) ---
-  Future<void> syncMaterials({bool force = false}) async {
+  Future<String?> syncMaterials({bool force = false}) async {
     try {
       final db = await DatabaseHelper.instance.database;
-      final userList = await db.query('users', limit: 1);
+      final userList = await db.query('pengguna', limit: 1);
       final user = userList.isNotEmpty ? userList.first : null;
 
       // Ambil last_sync (snake_case)
@@ -202,13 +273,13 @@ class SyncService {
           print('✅ Materi sudah up-to-date.');
           if (user != null) {
             await db.update(
-              'users',
+              'pengguna',
               {'last_sync': newServerTime}, // Update last_sync
               where: 'id = ?',
               whereArgs: [user['id']],
             );
           }
-          return;
+          return newServerTime;
         }
 
         print('📥 Menemukan ${data.length} materi baru.');
@@ -217,25 +288,25 @@ class SyncService {
           // Handle deleted materials
           if (item['status'] == 'deleted') {
             await db.delete(
-              'materials',
+              'materi',
               where: 'id = ?',
               whereArgs: [item['id']],
             );
             continue;
           }
 
-          // 🔥 PERBAIKAN 2: Prioritaskan snake_case ('image_url')
-          String? imageUrl = item['image_url'] ?? item['imageurl'];
+          // 🔥 PERBAIKAN 2: Prioritaskan snake_case ('url_gambar')
+          String? urlGambar = item['url_gambar'] ?? item['imageurl'];
 
           // 1. Download Cover Image
           String? localCoverPath;
-          if (imageUrl != null) {
-            localCoverPath = await _downloadFile(imageUrl);
+          if (urlGambar != null) {
+            localCoverPath = await _downloadFile(urlGambar);
           }
 
           // 2. Download Assets dalam Content JSON
-          // Handle content_indo dari API
-          var rawContent = item['content_indo'] ?? item['contentindo'] ?? [];
+          // Handle konten dari API
+          var rawContent = item['konten'] ?? item['contentindo'] ?? [];
           dynamic parsedContent;
 
           if (rawContent is String) {
@@ -268,51 +339,44 @@ class SyncService {
           await _scanAndDownloadAssets(nodesToScan, failedAssets);
 
           // 3. Simpan ke database (Gunakan struktur snake_case BARU)
-          await db.insert('materials', {
+          await db.insert('materi', {
             'id': item['id'],
-            'title_indo':
-                item['title_indo'] ?? item['titleindo'] ?? 'Tanpa Judul',
-            'category': item['category'] ?? 'umum',
-            'image_url': imageUrl,
+            'judul':
+                item['judul'] ?? item['titleindo'] ?? 'Tanpa Judul',
+            'kategori': item['kategori'] ?? 'umum',
+            'url_gambar': urlGambar,
             'local_image_path': localCoverPath, // ✅ Masuk ke kolom snake_case
-            'level_difficulty':
-                item['level_difficulty'] ?? item['leveldifficulty'] ?? 1,
-            'language_code':
-                item['language_code'] ?? item['languagecode'] ?? 'id',
-            'content_json': jsonEncode(
+            'tingkat_kesulitan':
+                item['tingkat_kesulitan'] ?? item['leveldifficulty'] ?? 1,
+            'kode_bahasa':
+                item['kode_bahasa'] ?? item['languagecode'] ?? 'id',
+            'konten': jsonEncode(
               parsedContent,
             ), // Simpan sebagai JSON String
-            'updated_at':
-                item['updated_at'] ??
+            'diperbarui_pada':
+                item['diperbarui_pada'] ??
                 item['updatedat'] ??
                 DateTime.now().toIso8601String(),
             'ai_embeddings': (item['ai_embeddings'] != null)
                 ? jsonEncode(item['ai_embeddings'])
                 : null,
-            'ai_status': item['ai_status'] ?? 'pending',
+            'status_ai': item['status_ai'] ?? 'pending',
             'is_deleted': 0,
           }, conflictAlgorithm: ConflictAlgorithm.replace);
         }
 
-        // Update last sync user
-        if (user != null) {
-          await db.update(
-            'users',
-            {'last_sync': newServerTime}, // ✅ last_sync
-            where: 'id = ?',
-            whereArgs: [user['id']],
-          );
-        }
+        return newServerTime;
       }
     } catch (e) {
       print('❌ Error Sync Materi: $e'); // Ini yang tadi nampilin error Null
     }
+    return null;
   }
 
   // ── FASE 4: ENGINE MANAJEMEN DLC GGUF (MEMORY-SAFE) ──
   // ── FASE 4.1: ENGINE MANAJEMEN DLC GGUF (RESUMABLE & MEMORY-SAFE) ──
   Future<bool> syncAIModelAndData(
-    int materialId, {
+    int materiId, {
     Function(double)? onProgress,
   }) async {
     final directory = await getApplicationDocumentsDirectory();
@@ -347,7 +411,23 @@ class SyncService {
 
     try {
       // 3. Eksekusi Download dengan Header RANGE (Standard RFC 7233)
-      await _dio.download(
+      // Gunakan Dio instance baru tanpa timeout agar download file besar (491MB) tidak terputus
+      final downloadDio = Dio(BaseOptions(
+        headers: {
+          'Host': ApiClient.hostDomain,
+        },
+      ));
+      
+      // Bypass SSL Certificate Error untuk download IP lokal
+      downloadDio.httpClientAdapter = IOHttpClientAdapter(
+        createHttpClient: () {
+          final client = HttpClient();
+          client.badCertificateCallback = (X509Certificate cert, String host, int port) => true;
+          return client;
+        },
+      );
+
+      await downloadDio.download(
         modelUrl,
         modelFile.path,
         options: Options(
@@ -355,8 +435,7 @@ class SyncService {
             'range': 'bytes=$existingLength-', // Request hanya sisa data
           },
         ),
-        deleteOnError:
-            false, // ⚠️ CRITICAL: Jangan hapus file jika error agar bisa lanjut nanti
+        deleteOnError: false, // ⚠️ CRITICAL: Jangan hapus file jika error agar bisa lanjut nanti
         onReceiveProgress: (received, total) {
           if (total != -1) {
             // Kalkulasi progres kumulatif (existing + current)
@@ -395,11 +474,11 @@ class SyncService {
 
   // lib/core/services/sync_service.dart
 
-  Future<void> syncQuestions({bool force = false}) async {
+  Future<String?> syncQuestions({bool force = false}) async {
     try {
       final db = await DatabaseHelper.instance.database;
-      final user = (await db.query('users', limit: 1)).isNotEmpty
-          ? (await db.query('users', limit: 1)).first
+      final user = (await db.query('pengguna', limit: 1)).isNotEmpty
+          ? (await db.query('pengguna', limit: 1)).first
           : null;
 
       String? lastSync = force ? null : (user?['last_sync'] as String?);
@@ -417,21 +496,21 @@ class SyncService {
         for (var item in data) {
           if (item['status'] == 'deleted') {
             await db.delete(
-              'questions',
+              'soal',
               where: 'id = ?',
               whereArgs: [item['id']],
             );
             continue;
           }
 
-          // ✅ Parse options_json
-          var rawOptions = item['options_json'] ?? [];
+          // ✅ Parse opsi_json
+          var rawOptions = item['opsi_json'] ?? [];
           String optionsString = (rawOptions is String)
               ? rawOptions
               : jsonEncode(rawOptions);
 
-          // ✅ FIX #6: Parse question_data
-          var rawQuestionData = item['question_data'];
+          // ✅ FIX #6: Parse data_soal
+          var rawQuestionData = item['data_soal'];
           String? questionDataString;
           if (rawQuestionData != null) {
             questionDataString = (rawQuestionData is String)
@@ -439,8 +518,8 @@ class SyncService {
                 : jsonEncode(rawQuestionData);
           }
 
-          // ✅ FIX #6: Parse assets_required
-          var rawAssetsRequired = item['assets_required'];
+          // ✅ FIX #6: Parse aset_diperlukan
+          var rawAssetsRequired = item['aset_diperlukan'];
           String? assetsRequiredString;
           if (rawAssetsRequired != null) {
             // Server sudah guarantee array, tapi tetap defensive
@@ -450,28 +529,30 @@ class SyncService {
           }
 
           // ✅ FIX #6: Simpan SEMUA field termasuk yang baru
-          await db.insert('questions', {
+          await db.insert('soal', {
             'id': item['id'],
-            'material_id': item['material_id'],
-            'question_text_indo': item['question_text_indo'] ?? 'Soal Kosong',
+            'materi_id': item['materi_id'],
+            'teks_soal': item['teks_soal'] ?? 'Soal Kosong',
             'question_text_tolaki': item['question_text_tolaki'],
-            'options_json': optionsString,
-            'correct_answer_key': item['correct_answer_key'] ?? 'a',
-            'difficulty_weight': item['difficulty_weight'] ?? 1,
+            'opsi_json': optionsString,
+            'kunci_jawaban': item['kunci_jawaban'] ?? 'a',
+            'bobot_kesulitan': item['bobot_kesulitan'] ?? 1,
             // ✅ Field baru Fase 3
-            'template_type': item['template_type'] ?? 'multiple_choice',
-            'question_data': questionDataString,
-            'assets_required': assetsRequiredString,
-            'updated_at': item['updated_at'],
+            'tipe_template': item['tipe_template'] ?? 'multiple_choice',
+            'data_soal': questionDataString,
+            'aset_diperlukan': assetsRequiredString,
+            'diperbarui_pada': item['diperbarui_pada'],
             'is_deleted': 0,
           }, conflictAlgorithm: ConflictAlgorithm.replace);
         }
 
         print('✅ Sync Questions selesai: ${data.length} soal diperbarui.');
+        return response.data['server_time'] ?? DateTime.now().toIso8601String();
       }
     } catch (e) {
       print('❌ Error Sync Soal: $e');
     }
+    return null;
   }
 
   Future<SyncAssetsResult> syncAssets(List<String> filenames) async {
@@ -519,7 +600,7 @@ class SyncService {
       );
 
       if (response.data['status'] == 'success') {
-        final List assetList = response.data['data'] ?? [];
+        final List assetList = response.data['data']['assets'] ?? [];
 
         // FILTER DEFENSIVE: Mencegah I/O freeze akibat URL null
         final availableAssets = assetList
@@ -533,7 +614,7 @@ class SyncService {
 
         // 4. Download satu per satu dengan retry (Hanya untuk aset valid)
         for (final asset in availableAssets) {
-          final String filename = asset['filename'];
+          final String filename = asset['nama_file'];
           final String url = asset['url'];
 
           bool success = await _downloadAssetWithRetry(
@@ -589,8 +670,23 @@ class SyncService {
           if (fileSize > 0) return true; // File valid, skip
         }
 
+        // ✅ FIX 403: Normalisasi URL — pastikan path relatif selalu
+        // diawali 'storage/' agar symlink Laravel (storage:link) terpenuhi.
+        // Jika URL sudah absolut (http/https) atau sudah mengandung 'storage/',
+        // tidak ada perubahan yang dilakukan.
+        String resolvedUrl = url;
+        if (!url.startsWith('http://') && !url.startsWith('https://')) {
+          // Strip leading slash jika ada
+          resolvedUrl = resolvedUrl.startsWith('/') ? resolvedUrl.substring(1) : resolvedUrl;
+          if (!resolvedUrl.startsWith('storage/')) {
+            resolvedUrl = 'storage/$resolvedUrl';
+          }
+          final baseUrl = ApiClient.baseUrl.replaceAll(RegExp(r'/api/?$'), '/');
+          resolvedUrl = '$baseUrl$resolvedUrl';
+        }
+
         await _dio.download(
-          url,
+          resolvedUrl,
           savePath,
           onReceiveProgress: (received, total) {
             if (total > 0) {
@@ -711,7 +807,7 @@ class SyncService {
 
       print('📥 Downloading Asset: $fileName');
       // Pastikan URL storage benar
-      final baseUrl = ApiClient.baseUrl.replaceAll('/api/', '/storage/assets/');
+      final baseUrl = ApiClient.baseUrl.replaceAll('/api/', '/storage/');
       final fullUrl = '$baseUrl$fileName';
 
       await _dio.download(fullUrl, savePath);
@@ -749,12 +845,12 @@ class SyncService {
 
     try {
       final db = await DatabaseHelper.instance.database;
-      final userList = await db.query('users', limit: 1);
+      final userList = await db.query('pengguna', limit: 1);
 
       // Default ke 'id' jika user belum ada atau bahasa kosong
       String langCode = 'id';
-      if (userList.isNotEmpty && userList.first['language_code'] != null) {
-        langCode = userList.first['language_code'] as String;
+      if (userList.isNotEmpty && userList.first['kode_bahasa'] != null) {
+        langCode = userList.first['kode_bahasa'] as String;
       }
 
       bool dictSuccess = await DictionaryService.instance.downloadDictionary(
@@ -782,9 +878,9 @@ class SyncService {
 
   Future<void> syncPendingProfile() async {
     final db = await DatabaseHelper.instance.database;
-    final List<Map<String, dynamic>> users = await db.query('users', limit: 1);
+    final List<Map<String, dynamic>> users = await db.query('pengguna', limit: 1);
 
-    if (users.isEmpty || users.first['is_synced'] == 1) return;
+    if (users.isEmpty || users.first['sinkron'] == 1) return;
 
     final user = users.first;
     final String? localPath = user['local_image_path'] as String?;
@@ -802,13 +898,13 @@ class SyncService {
         final response = await _dio.post('/update-profile', data: formData);
 
         if (response.data['status'] == 'success') {
-          String serverUrl = response.data['data']['image_url'];
+          String serverUrl = response.data['data']['url_gambar'];
 
           await db.update(
-            'users',
+            'pengguna',
             {
-              'image_url': serverUrl,
-              'is_synced': 1, // BERHASIL: Tandai bersih
+              'url_gambar': serverUrl,
+              'sinkron': 1, // BERHASIL: Tandai bersih
             },
             where: 'id = ?',
             whereArgs: [user['id']],
@@ -825,76 +921,76 @@ class SyncService {
   /// ✅ P7: Helper terpusat untuk simpan progress ke SQLite
   /// Dipanggil dari semua QuizWidget setelah user menjawab
   Future<void> saveProgress({
-    required int userId,
-    required int questionId,
-    required String templateType,
+    required int penggunaId,
+    required int soalId,
+    required String tipeTemplate,
     required dynamic
-    studentAnswer, // String atau Map/List untuk template kompleks
-    required bool isCorrect,
-    int? timeSpentSeconds,
+    jawabanSiswa, // String atau Map/List untuk template kompleks
+    required bool benar,
+    int? waktuDetik,
   }) async {
     final db = await DatabaseHelper.instance.database;
     final now = DateTime.now().toIso8601String();
 
     // Serialize answer ke String untuk SQLite
     String answerString;
-    if (studentAnswer is String) {
-      answerString = studentAnswer;
+    if (jawabanSiswa is String) {
+      answerString = jawabanSiswa;
     } else {
       // Map atau List → encode ke JSON string
-      answerString = jsonEncode(studentAnswer);
+      answerString = jsonEncode(jawabanSiswa);
     }
 
     // Cek apakah sudah ada jawaban benar sebelumnya
     final existingCorrect = await db.query(
-      'student_progress',
-      where: 'user_id = ? AND question_id = ? AND is_correct = 1',
-      whereArgs: [userId, questionId],
+      'progres_siswa',
+      where: 'pengguna_id = ? AND soal_id = ? AND benar = 1',
+      whereArgs: [penggunaId, soalId],
     );
 
     // Jika sudah benar sebelumnya, jangan overwrite
     if (existingCorrect.isNotEmpty) {
-      print('ℹ️ Soal $questionId sudah pernah dijawab benar, skip.');
+      print('ℹ️ Soal $soalId sudah pernah dijawab benar, skip.');
       return;
     }
 
     final existingAny = await db.query(
-      'student_progress',
-      where: 'user_id = ? AND question_id = ?',
-      whereArgs: [userId, questionId],
+      'progres_siswa',
+      where: 'pengguna_id = ? AND soal_id = ?',
+      whereArgs: [penggunaId, soalId],
     );
 
     if (existingAny.isEmpty) {
       // Insert baru
-      await db.insert('student_progress', {
-        'user_id': userId,
-        'question_id': questionId,
-        'student_answer': answerString,
-        'is_correct': isCorrect ? 1 : 0,
-        'time_spent_seconds': timeSpentSeconds ?? 0,
-        'answered_at': now,
-        'template_type': templateType,
-        'is_synced': 0,
+      await db.insert('progres_siswa', {
+        'pengguna_id': penggunaId,
+        'soal_id': soalId,
+        'jawaban_siswa': answerString,
+        'benar': benar ? 1 : 0,
+        'waktu_detik': waktuDetik ?? 0,
+        'dijawab_pada': now,
+        'tipe_template': tipeTemplate,
+        'sinkron': 0,
       });
-    } else if (isCorrect) {
+    } else if (benar) {
       // Update hanya jika jawaban sekarang benar
       await db.update(
-        'student_progress',
+        'progres_siswa',
         {
-          'student_answer': answerString,
-          'is_correct': 1,
-          'time_spent_seconds': timeSpentSeconds ?? 0,
-          'answered_at': now,
-          'template_type': templateType,
-          'is_synced': 0,
+          'jawaban_siswa': answerString,
+          'benar': 1,
+          'waktu_detik': waktuDetik ?? 0,
+          'dijawab_pada': now,
+          'tipe_template': tipeTemplate,
+          'sinkron': 0,
         },
-        where: 'user_id = ? AND question_id = ?',
-        whereArgs: [userId, questionId],
+        where: 'pengguna_id = ? AND soal_id = ?',
+        whereArgs: [penggunaId, soalId],
       );
     }
 
     print(
-      '💾 Progress saved: Q$questionId | $templateType | ${isCorrect ? "✅" : "❌"}',
+      '💾 Progress saved: Q$soalId | $tipeTemplate | ${benar ? "✅" : "❌"}',
     );
   }
 }

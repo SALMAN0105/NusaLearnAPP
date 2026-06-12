@@ -58,15 +58,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       _serverImageUrlDisplay = prefs.getString('user_image_url');
     });
 
-    final List<Map<String, dynamic>> maps = await db.query('users', limit: 1);
+    final List<Map<String, dynamic>> maps = await db.query('pengguna', limit: 1);
     if (maps.isNotEmpty) {
       final user = maps.first;
       setState(() {
-        _nameController.text = user['name'] as String? ?? "";
-        _usernameController.text = user['username'] as String? ?? "";
+        _nameController.text = user['nama'] as String? ?? "";
+        _usernameController.text = user['nama_pengguna'] as String? ?? "";
         _schoolController.text =
-            user['school_origin'] as String? ?? "Belum terdaftar";
-        _zipCodeController.text = user['postal_code'] as String? ?? "-";
+            user['asal_sekolah'] as String? ?? "Belum terdaftar";
+        _zipCodeController.text = user['kode_pos'] as String? ?? "-";
       });
     }
   }
@@ -75,8 +75,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     setState(() => _isLoading = true);
     try {
       FormData formData = FormData.fromMap({
-        'name': _nameController.text,
-        'username': _usernameController.text,
+        'nama': _nameController.text,
+        'nama_pengguna': _usernameController.text,
       });
 
       final response = await ApiClient.getClient().post(
@@ -92,10 +92,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         await prefs.setString('user_username', _usernameController.text);
 
         await db.update(
-          'users',
-          {'name': _nameController.text, 'username': _usernameController.text},
-          where: 'id = ?',
-          whereArgs: [1],
+          'pengguna',
+          {'nama': _nameController.text, 'nama_pengguna': _usernameController.text},
         );
 
         if (mounted) _showSuccessPopup();
@@ -106,7 +104,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         err = e.response?.data['message'] ?? err;
         if (e.response?.data['errors'] != null) {
           var errors = e.response?.data['errors'];
-          if (errors['username'] != null) err = errors['username'][0];
+          if (errors['nama_pengguna'] != null) err = errors['nama_pengguna'][0];
         }
       }
       if (mounted) _showErrorSnackBar(err);

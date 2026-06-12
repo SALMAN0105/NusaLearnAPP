@@ -3,12 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class FillBlankQuizWidget extends StatefulWidget {
-  final Map<String, dynamic> questionData;
+  final Map<String, dynamic> dataSoal;
   final Function(String answerJson, double correctnessRatio) onSubmit;
 
   const FillBlankQuizWidget({
     super.key,
-    required this.questionData,
+    required this.dataSoal,
     required this.onSubmit,
   });
 
@@ -30,9 +30,9 @@ class _FillBlankQuizWidgetState extends State<FillBlankQuizWidget> {
   @override
   void initState() {
     super.initState();
-    _questionText = widget.questionData['question_text_indo'] ?? "";
-    _blanksData = widget.questionData['blanks'] ?? [];
-    _wordBank = widget.questionData['word_bank'] ?? [];
+    _questionText = widget.dataSoal['teks_soal'] ?? "";
+    _blanksData = widget.dataSoal['blanks'] ?? [];
+    _wordBank = widget.dataSoal['word_bank'] ?? [];
 
     // Inisialisasi slot kosong
     for (var blank in _blanksData) {
@@ -228,7 +228,7 @@ class _FillBlankQuizWidgetState extends State<FillBlankQuizWidget> {
       if (i < parts.length - 1 && blankIndex < _blanksData.length) {
         String currentBlankId = _blanksData[blankIndex]['id'];
         String currentAnswer = _userAnswers[currentBlankId] ?? "";
-        bool isActive = _activeBlankId == currentBlankId;
+        bool aktif = _activeBlankId == currentBlankId;
 
         spans.add(
           WidgetSpan(
@@ -245,17 +245,17 @@ class _FillBlankQuizWidgetState extends State<FillBlankQuizWidget> {
                   vertical: 4,
                 ),
                 decoration: BoxDecoration(
-                  color: isActive
+                  color: aktif
                       ? const Color(0xFFE0F7FA)
                       : (currentAnswer.isNotEmpty
                             ? const Color(0xFFD2F945)
                             : const Color(0xFFF5F3FF)),
                   border: Border.all(
-                    color: isActive ? const Color(0xFF7C3AED) : Colors.black,
-                    width: isActive ? 2.5 : 1.5,
+                    color: aktif ? const Color(0xFF7C3AED) : Colors.black,
+                    width: aktif ? 2.5 : 1.5,
                   ),
                   borderRadius: BorderRadius.circular(12),
-                  boxShadow: isActive
+                  boxShadow: aktif
                       ? const [
                           BoxShadow(
                             color: Color(0xFF7C3AED),
@@ -271,7 +271,7 @@ class _FillBlankQuizWidgetState extends State<FillBlankQuizWidget> {
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 16,
                     fontWeight: FontWeight.w900,
-                    color: isActive ? const Color(0xFF7C3AED) : Colors.black,
+                    color: aktif ? const Color(0xFF7C3AED) : Colors.black,
                   ),
                 ),
               ),

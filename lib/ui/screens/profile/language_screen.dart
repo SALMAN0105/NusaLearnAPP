@@ -37,11 +37,11 @@ class _LanguageScreenState extends State<LanguageScreen> {
 
   Future<void> _loadLanguageSettings() async {
     final db = await DatabaseHelper.instance.database;
-    final userList = await db.query('users', limit: 1);
+    final userList = await db.query('pengguna', limit: 1);
     final user = userList.isNotEmpty ? userList.first : null;
 
     if (user != null) {
-      _userLanguageCode = user['language_code'] as String?;
+      _userLanguageCode = user['kode_bahasa'] as String?;
       _userLanguageName = _getLanguageName(_userLanguageCode);
 
       final prefs = await SharedPreferences.getInstance();
@@ -486,7 +486,7 @@ class _LanguageScreenState extends State<LanguageScreen> {
                                   "🇮🇩",
                                   style: TextStyle(fontSize: 24),
                                 ),
-                                isActive: !_useLocalLanguage,
+                                aktif: !_useLocalLanguage,
                                 onTap: () => _switchLanguage(false),
                               ),
                               const SizedBox(height: 32),
@@ -503,7 +503,7 @@ class _LanguageScreenState extends State<LanguageScreen> {
                                   size: 20,
                                 ),
                                 flagBg: kPurple,
-                                isActive: _useLocalLanguage,
+                                aktif: _useLocalLanguage,
                                 onTap: () => _switchLanguage(true),
                                 showDownloadIcon:
                                     !_isDictionaryReady &&
@@ -542,7 +542,7 @@ class _LanguageScreenState extends State<LanguageScreen> {
     required String subtitle,
     required Widget flagWidget,
     Color flagBg = kWhite,
-    required bool isActive,
+    required bool aktif,
     required VoidCallback onTap,
     bool showDownloadIcon = false,
   }) {
@@ -551,7 +551,7 @@ class _LanguageScreenState extends State<LanguageScreen> {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: isActive ? kLime : kWhite,
+          color: aktif ? kLime : kWhite,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: kBlack, width: kBorderWidth),
           boxShadow: const [BoxShadow(color: kBlack, offset: Offset(4, 4))],
@@ -611,7 +611,7 @@ class _LanguageScreenState extends State<LanguageScreen> {
             else
               Icon(
                 Icons.check_circle_rounded,
-                color: isActive ? kBlack : Colors.transparent,
+                color: aktif ? kBlack : Colors.transparent,
                 size: 28,
               ),
           ],

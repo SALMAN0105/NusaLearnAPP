@@ -48,10 +48,10 @@ class _SyllableExerciseWidgetState extends State<SyllableExerciseWidget> {
     String suffix = item['question_suffix'] ?? '';
     String correct = item['correct_answer'] ?? '';
     List<dynamic> options = item['options'] ?? [];
-    String? imageUrl = item['image'];
+    String? urlGambar = item['image'];
 
     bool isAnswered = _userAnswers.containsKey(id);
-    bool isCorrect = isAnswered && _userAnswers[id] == correct;
+    bool benar = isAnswered && _userAnswers[id] == correct;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
@@ -61,7 +61,7 @@ class _SyllableExerciseWidgetState extends State<SyllableExerciseWidget> {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: isAnswered
-              ? (isCorrect ? Colors.green : Colors.red)
+              ? (benar ? Colors.green : Colors.red)
               : Colors.grey.shade200,
           width: 2,
         ),
@@ -76,7 +76,7 @@ class _SyllableExerciseWidgetState extends State<SyllableExerciseWidget> {
       child: Column(
         children: [
           // 1. GAMBAR SOAL
-          if (imageUrl != null) _LocalImageLoader(fileName: imageUrl),
+          if (urlGambar != null) _LocalImageLoader(fileName: urlGambar),
 
           const SizedBox(height: 16),
 
@@ -118,7 +118,7 @@ class _SyllableExerciseWidgetState extends State<SyllableExerciseWidget> {
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
                       color: isAnswered
-                          ? (isCorrect ? Colors.green : Colors.red)
+                          ? (benar ? Colors.green : Colors.red)
                           : Colors.teal,
                     ),
                   ),
@@ -185,9 +185,9 @@ class _SyllableExerciseWidgetState extends State<SyllableExerciseWidget> {
             Padding(
               padding: const EdgeInsets.only(top: 12),
               child: Text(
-                isCorrect ? "Hebat! Benar 🎉" : "Ups, coba lagi ya!",
+                benar ? "Hebat! Benar 🎉" : "Ups, coba lagi ya!",
                 style: GoogleFonts.poppins(
-                  color: isCorrect ? Colors.green : Colors.red,
+                  color: benar ? Colors.green : Colors.red,
                   fontWeight: FontWeight.bold,
                 ),
               ),

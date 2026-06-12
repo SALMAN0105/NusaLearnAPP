@@ -29,7 +29,7 @@ class AICoordinator {
   bool _isInitialized = false;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
 
-  /// LRU Cache: key = "$materialId:$queryHash" → cached answer
+  /// LRU Cache: key = "$materiId:$queryHash" → cached answer
   final LinkedHashMap<String, String> _responseCache = LinkedHashMap();
 
   /// Callback mode change
@@ -157,7 +157,7 @@ class AICoordinator {
 Kamu adalah asisten pembelajaran cerdas untuk aplikasi NusaLearn.
 Selalu jawab dalam Bahasa Indonesia yang ramah dan mudah dipahami siswa.
 
-=== KONTEKS MATERI: "${material.titleIndo}" ===
+=== KONTEKS MATERI: "${material.judul}" ===
 $context
 
 === PERTANYAAN SISWA ===
@@ -183,7 +183,7 @@ $normalizedInput
 $response
 
 ---
-📚 ${material.titleIndo} · 🌐 Powered by OpenAI · ✅ Berdasarkan Materi''';
+📚 ${material.judul} · 🌐 Powered by OpenAI · ✅ Berdasarkan Materi''';
   }
 
   // ✅ FIX: Ubah return type menjadi Future<String> dan tambahkan async
@@ -236,19 +236,19 @@ Materi belum selesai diproses oleh AI. Silakan:
 
   // ═══ CACHE ════════════════════════════════════════════════════════════════
 
-  String _buildCacheKey(int materialId, String query) {
+  String _buildCacheKey(int materiId, String query) {
     // Hash sederhana: 8 karakter cukup untuk cache key
     final hash = query.toLowerCase().trim().hashCode.toRadixString(36);
-    return '$materialId:$hash';
+    return '$materiId:$hash';
   }
 
-  void _cacheResponse(int materialId, String query, String response) {
+  void _cacheResponse(int materiId, String query, String response) {
     if (response.contains('Tidak Ditemukan') ||
         response.contains('Belum Siap')) {
       return; // Jangan cache respons negatif
     }
 
-    final key = _buildCacheKey(materialId, query);
+    final key = _buildCacheKey(materiId, query);
 
     // LRU eviction: hapus entry terlama jika sudah penuh
     if (_responseCache.length >= _kMaxCacheSize) {

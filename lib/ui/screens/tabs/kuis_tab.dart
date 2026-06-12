@@ -8,6 +8,7 @@ import 'package:nusalearn/core/database/database_helper.dart';
 import 'package:nusalearn/core/services/adaptive_service.dart';
 import 'package:nusalearn/logic/providers/auth_provider.dart';
 import 'package:nusalearn/ui/screens/quiz_screen.dart';
+import 'package:nusalearn/core/services/dictionary_service.dart';
 
 // --- KONSTANTA NEO-BRUTALISM ---
 const Color kLime = Color(0xFFD2F945);
@@ -69,47 +70,44 @@ class _KuisTabState extends State<KuisTab> with TickerProviderStateMixin {
     setState(() => _isLoading = true);
     final db = await DatabaseHelper.instance.database;
 
-    int userId = 0;
-    final userResult = await db.query('users', limit: 1);
-    if (userResult.isNotEmpty) userId = userResult.first['id'] as int;
+    int penggunaId = 0;
+    final userResult = await db.query('pengguna', limit: 1);
+    if (userResult.isNotEmpty) penggunaId = userResult.first['id'] as int;
 
-    int calculatedLevel = await AdaptiveService().calculateStudentLevel(userId);
+    int calculatedLevel = await AdaptiveService().calculateStudentLevel(penggunaId);
 
     String whereClause = 'm.is_deleted = 0 AND q.is_deleted = 0';
     List<dynamic> args = [];
 
     if (_selectedCategory != "Semua") {
-      whereClause += ' AND m.category LIKE ?';
+      whereClause += ' AND m.kategori LIKE ?';
       args.add(_selectedCategory);
     }
 
     if (_selectedLevel != 0) {
-      whereClause += ' AND m.level_difficulty = ?';
+      whereClause += ' AND m.tingkat_kesulitan = ?';
       args.add(_selectedLevel);
-    } else {
-      whereClause += ' AND m.level_difficulty <= ?';
-      args.add(calculatedLevel);
-    }
+    } // REMOVED else block so it shows all locked levels
 
     final data = await db.rawQuery(
       '''
       SELECT 
         m.id, 
-        m.title_indo, 
-        m.category, 
-        m.level_difficulty, 
+        m.judul, 
+        m.kategori, 
+        m.tingkat_kesulitan, 
         m.local_image_path,
-        COUNT(DISTINCT CASE WHEN q.difficulty_weight <= ? THEN q.id END) as total_questions,
-        COUNT(DISTINCT CASE WHEN q.difficulty_weight <= ? THEN sp.question_id END) as answered_questions
-      FROM materials m
-      JOIN questions q ON m.id = q.material_id AND q.is_deleted = 0
-      LEFT JOIN student_progress sp ON q.id = sp.question_id AND sp.user_id = ?
+        COUNT(DISTINCT CASE WHEN q.bobot_kesulitan <= ? THEN q.id END) as total_questions,
+        COUNT(DISTINCT CASE WHEN q.bobot_kesulitan <= ? THEN sp.soal_id END) as answered_questions
+      FROM materi m
+      JOIN soal q ON m.id = q.materi_id AND q.is_deleted = 0
+      LEFT JOIN progres_siswa sp ON q.id = sp.soal_id AND sp.pengguna_id = ?
       WHERE $whereClause
       GROUP BY m.id
       HAVING total_questions > 0
       ORDER BY m.id DESC
     ''',
-      [calculatedLevel, calculatedLevel, userId, ...args],
+      [calculatedLevel, calculatedLevel, penggunaId, ...args],
     );
 
     if (mounted) {
@@ -725,14 +723,17 @@ class _KuisTabState extends State<KuisTab> with TickerProviderStateMixin {
                                 index,
                               ) {
                                 final item = _quizList[index];
+                                final isLocked = (item['tingkat_kesulitan'] as int) > _studentLevel;
                                 return GestureDetector(
-                                  onTap: () async {
+                                  onTap: isLocked ? () {
+                                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Kuis ini terkunci! Selesaikan level sebelumnya.')));
+                                  } : () async {
                                     await Navigator.push(
                                       context,
                                       MaterialPageRoute(
                                         builder: (context) => QuizScreen(
-                                          materialId: item['id'],
-                                          materialTitle: item['title_indo'],
+                                          materiId: item['id'],
+                                          materialTitle: item['judul'],
                                         ),
                                       ),
                                     );
@@ -741,6 +742,7 @@ class _KuisTabState extends State<KuisTab> with TickerProviderStateMixin {
                                   child: _QuizGridCard(
                                     item: item,
                                     index: index,
+                                    isLocked: isLocked,
                                   ),
                                 );
                               }, childCount: _quizList.length),
@@ -766,8 +768,9 @@ class _KuisTabState extends State<KuisTab> with TickerProviderStateMixin {
 class _QuizGridCard extends StatelessWidget {
   final Map<String, dynamic> item;
   final int index;
+  final bool isLocked;
 
-  const _QuizGridCard({required this.item, required this.index});
+  const _QuizGridCard({super.key, required this.item, required this.index, this.isLocked = false});
 
   @override
   Widget build(BuildContext context) {
@@ -828,6 +831,18 @@ class _QuizGridCard extends StatelessWidget {
                             ),
                     ),
                   ),
+                                    if (isLocked)
+                    Positioned.fill(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: kBlack.withOpacity(0.6),
+                          borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+                        ),
+                        child: const Center(
+                          child: Icon(Icons.lock_rounded, color: kWhite, size: 48),
+                        ),
+                      ),
+                    ),
                   Positioned(
                     top: 10,
                     left: 10,
@@ -845,7 +860,7 @@ class _QuizGridCard extends StatelessWidget {
                         ],
                       ),
                       child: Text(
-                        (item['category'] ?? 'UMUM').toString().toUpperCase(),
+                        (item['kategori'] ?? 'UMUM').toString().toUpperCase(),
                         style: GoogleFonts.plusJakartaSans(
                           fontSize: 9,
                           fontWeight: FontWeight.w900,
@@ -888,7 +903,9 @@ class _QuizGridCard extends StatelessWidget {
               mainAxisSize: MainAxisSize.min, // Defensive flex
               children: [
                 Text(
-                  item['title_indo'] ?? 'Kuis',
+                  DictionaryService.instance.translateSync(
+                    item['judul'] ?? 'Kuis',
+                  ),
                   style: GoogleFonts.plusJakartaSans(
                     fontWeight: FontWeight.w900,
                     fontSize: 13,

@@ -66,8 +66,8 @@ class _AiChatSheetState extends State<AiChatSheet> {
     Future<void> _debugAiEmbeddings() async {
       final db = await DatabaseHelper.instance.database;
       final rows = await db.query(
-        'materials',
-        columns: ['id', 'ai_status', 'ai_embeddings'],
+        'materi',
+        columns: ['id', 'status_ai', 'ai_embeddings'],
         where: 'id = ?',
         whereArgs: [widget.material.id],
       );
@@ -77,7 +77,7 @@ class _AiChatSheetState extends State<AiChatSheet> {
       }
 
       final row = rows.first;
-      print('📊 ai_status: ${row['ai_status']}');
+      print('📊 status_ai: ${row['status_ai']}');
       print('📊 ai_embeddings null?: ${row['ai_embeddings'] == null}');
       print(
         '📊 ai_embeddings kosong?: ${(row['ai_embeddings'] as String?)?.isEmpty}',
@@ -101,7 +101,20 @@ class _AiChatSheetState extends State<AiChatSheet> {
     if (result.isNotEmpty) {
       final path = result.first['absolute_path'] as String?;
       if (path != null && await File(path).exists()) {
-        ready = true;
+        int fileLength = await File(path).length();
+        // Validasi ukuran model (GGUF qwen2.5-0.5b adalah ~491MB)
+        if (fileLength > 450000000) {
+          ready = true;
+        } else {
+          // File hasil timeout/korup, hapus agar bisa unduh ulang
+          print('⚠️ Model korup/tidak lengkap ($fileLength bytes), mereset...');
+          await db.update('ai_model_registry', {'is_ready': 0});
+          try {
+            await File(path).delete();
+          } catch (e) {
+            print("Gagal menghapus file: $e");
+          }
+        }
       } else {
         // Registry stale — reset agar user bisa download ulang
         await db.update('ai_model_registry', {'is_ready': 0});
@@ -145,7 +158,7 @@ class _AiChatSheetState extends State<AiChatSheet> {
   }
 
   void _checkAIReadiness() {
-    if (widget.material.aiStatus != 'ready') {
+    if (widget.material.statusAi != 'ready') {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           _messages.add({
@@ -275,7 +288,7 @@ Detail: ${e.toString()}''',
                 itemCount: _messages.length,
                 itemBuilder: (context, index) {
                   final msg = _messages[index];
-                  final isUser = msg['role'] == 'user';
+                  final isUser = msg['peran'] == 'user';
                   return _buildMessageBubble(msg, isUser);
                 },
               ),
@@ -371,7 +384,7 @@ Detail: ${e.toString()}''',
           ),
           const SizedBox(height: 8),
           Text(
-            widget.material.titleIndo,
+            widget.material.judul,
             style: GoogleFonts.plusJakartaSans(
               fontSize: 12,
               fontWeight: FontWeight.w700,

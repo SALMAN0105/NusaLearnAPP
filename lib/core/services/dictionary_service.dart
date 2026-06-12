@@ -26,127 +26,158 @@ class DictionaryService {
   // DOWNLOAD
   // ─────────────────────────────────────────
   // ─────────────────────────────────────────
-  // DOWNLOAD (PATCHED: MEMORY-SAFE & ANTI-CORRUPTION)
+  // DOWNLOAD (PATCHED: ROBUST URL & ERROR HANDLING)
   // ─────────────────────────────────────────
-  Future<bool> downloadDictionary(String languageCode) async {
+  Future<bool> downloadDictionary(String kodeBahasa) async {
     try {
       final dir = await getApplicationDocumentsDirectory();
-      final savePath = '${dir.path}/dictionary_$languageCode.json';
+      final savePath = '${dir.path}/dictionary_$kodeBahasa.json';
       final file = File(savePath);
 
-      // 1. DEFENSIVE CHECK: Validasi integritas jika file sudah ada
+      // 1. Validasi jika file sudah ada
       if (await file.exists()) {
-        bool isValid = await loadDictionary(languageCode);
+        bool isValid = await loadDictionary(kodeBahasa);
         if (isValid) return true;
 
-        // Jika file berisi HTML 404 / korup, musnahkan dari disk
         debugPrint("⚠️ File kamus korup terdeteksi. Menghapus cache lama...");
         await file.delete();
       }
 
-      String serverPath = 'dictionaries/kamus_$languageCode.json';
-      final baseUrl = ApiClient.baseUrl.replaceAll('api/', 'storage');
-      final fullUrl = '$baseUrl/$serverPath';
+      // 2. Konstruksi URL yang lebih robust (Sesuai pola SyncService)
+      final baseUrl = ApiClient.baseUrl.contains('/api')
+          ? ApiClient.baseUrl.substring(0, ApiClient.baseUrl.indexOf('/api'))
+          : ApiClient.baseUrl.replaceAll(RegExp(r'/$'), '');
+      
+      final fullUrl = '$baseUrl/storage/dictionaries/kamus_$kodeBahasa.json';
 
       debugPrint("📥 Memulai unduhan kamus dari: $fullUrl");
 
-      // 2. EKSEKUSI UNDUHAN
+      // 3. Eksekusi Unduhan
       await _dio.download(fullUrl, savePath);
 
-      // 3. VALIDASI PASCA-UNDUH
+      // 4. Validasi Pasca-Unduh
       if (await file.exists()) {
-        bool isLoaded = await loadDictionary(languageCode);
-        if (!isLoaded) {
-          debugPrint(
-            "❌ File berhasil diunduh namun gagal di-parse. Menghapus artefak...",
-          );
-          await file.delete(); // Pembersihan memori
+        bool loaded = await loadDictionary(kodeBahasa);
+        if (!loaded) {
+          debugPrint("❌ File berhasil diunduh namun gagal di-parse. Menghapus...");
+          await file.delete();
           return false;
         }
         return true;
       }
       return false;
     } catch (e) {
-      debugPrint(
-        "❌ Terjadi kegagalan I/O atau Jaringan saat mengunduh kamus: $e",
-      );
-
-      // Bersihkan artefak jika Dio terlanjur membuat file kosong/HTML
-      final dir = await getApplicationDocumentsDirectory();
-      final file = File('${dir.path}/dictionary_$languageCode.json');
-      if (await file.exists()) await file.delete();
-
+      debugPrint("❌ Gagal mengunduh kamus ($kodeBahasa): $e");
       return false;
     }
   }
 
-  Future<bool> isDictionaryDownloaded(String languageCode) async {
+  Future<bool> isDictionaryDownloaded(String kodeBahasa) async {
     try {
       final dir = await getApplicationDocumentsDirectory();
-      return await File('${dir.path}/dictionary_$languageCode.json').exists();
+      final file = File('${dir.path}/dictionary_$kodeBahasa.json');
+      return await file.exists() && await file.length() > 0;
     } catch (e) {
       return false;
     }
   }
 
   // ─────────────────────────────────────────
-  // LOAD: Migrasi JSON → SQLite + isi hot cache
+  // LOAD: Support Map & List + Atomic DB Update
   // ─────────────────────────────────────────
-  Future<bool> loadDictionary(String languageCode) async {
+  Future<bool> loadDictionary(String kodeBahasa) async {
+    if (kodeBahasa == 'id') {
+      _activeLang = 'id';
+      _syncCache.clear();
+      isLoaded = true;
+      return true;
+    }
+
     try {
       final dir = await getApplicationDocumentsDirectory();
-      final file = File('${dir.path}/dictionary_$languageCode.json');
+      final file = File('${dir.path}/dictionary_$kodeBahasa.json');
 
       if (!await file.exists()) {
         isLoaded = false;
         return false;
       }
 
+      final content = await file.readAsString();
+      if (content.isEmpty) return false;
+
+      final dynamic jsonData = jsonDecode(content);
       final db = await DatabaseHelper.instance.database;
 
-      final countResult = await db.rawQuery(
-        'SELECT COUNT(*) as cnt FROM dictionary WHERE language_code = ?',
-        [languageCode],
-      );
-      int count = countResult.first['cnt'] as int? ?? 0;
+      // ✅ 1. Atomic DB Update
+      await db.transaction((txn) async {
+        await txn.delete(
+          'dictionary',
+          where: 'kode_bahasa = ?',
+          whereArgs: [kodeBahasa],
+        );
 
-      String content = await file.readAsString();
-      dynamic jsonData = jsonDecode(content);
+        final batch = txn.batch();
+        int count = 0;
+        _syncCache.clear();
 
-      if (count == 0 && jsonData is Map<String, dynamic>) {
-        await db.transaction((txn) async {
-          final batch = txn.batch();
-          jsonData.forEach((localWord, indoWord) {
-            batch.insert('dictionary', {
-              'word_indo': indoWord.toString().toLowerCase().trim(),
-              'word_tolaki': localWord.toString().toLowerCase().trim(),
-              'language_code': languageCode,
-            });
-          });
-          await batch.commit(noResult: true);
-        });
-      }
+        void addEntry(dynamic k, dynamic v) {
+          if (k == null || v == null) return;
+          final s1 = k.toString().toLowerCase().trim();
+          final s2 = v.toString().toLowerCase().trim();
+          if (s1.isEmpty || s2.isEmpty) return;
 
-      // ✅ Isi hot cache (word_indo → word_tolaki) — max 2000 entri
-      // Ambil entri paling umum saja agar RAM aman di low-end device
-      _syncCache.clear();
-      if (jsonData is Map<String, dynamic>) {
-        int loaded = 0;
-        for (final entry in jsonData.entries) {
-          if (loaded >= _kMaxCacheEntries) break;
-          final local = entry.key.toString().toLowerCase().trim();
-          final indo = entry.value.toString().toLowerCase().trim();
-          if (indo.isNotEmpty && local.isNotEmpty) {
-            _syncCache[indo] = local; // indo → local (untuk translateToLocal)
+          // INTELLIGENT HEURISTIC: Tentukan mana yang Indonesia
+          final commonIndo = {'home', 'materi', 'profil', 'kuis', 'beranda', 'belajar', 'numerasi', 'literasi', 'hapus', 'batal'};
+          
+          String indo, local;
+          if (commonIndo.contains(s1)) {
+            indo = s1; local = s2;
+          } else if (commonIndo.contains(s2)) {
+            indo = s2; local = s1;
+          } else {
+            // Default: local=key, indo=value. Tapi isi cache bi-directional agar aman
+            local = s1; indo = s2;
           }
-          loaded++;
-        }
-      }
 
-      _activeLang = languageCode;
+          batch.insert('dictionary', {
+            'word_indo': indo,
+            'word_tolaki': local,
+            'kode_bahasa': kodeBahasa,
+          });
+
+          // Isi cache (Keduanya dimasukkan untuk menjamin lookup translateSync berhasil)
+          if (_syncCache.length < _kMaxCacheEntries) {
+            _syncCache[indo] = local;
+            if (_syncCache.length < _kMaxCacheEntries) {
+              _syncCache[local] = indo; 
+            }
+          }
+          count++;
+        }
+
+        if (jsonData is Map<String, dynamic>) {
+          jsonData.forEach((k, v) => addEntry(k, v));
+        } else if (jsonData is List) {
+          for (var item in jsonData) {
+            if (item is Map) {
+              final k = item['word_tolaki'] ?? item['local'] ?? item.keys.first;
+              final v = item['word_indo'] ?? item['indo'] ?? item.values.last;
+              addEntry(k, v);
+            }
+          }
+        }
+
+        if (count > 0) {
+          await batch.commit(noResult: true);
+        }
+      });
+
+      _activeLang = kodeBahasa;
       isLoaded = true;
+      debugPrint("✅ Kamus $kodeBahasa dimuat: ${_syncCache.length} entri di cache (Bi-directional).");
       return true;
     } catch (e) {
+      debugPrint("❌ Gagal memuat kamus: $e");
       isLoaded = false;
       return false;
     }
@@ -173,21 +204,19 @@ class DictionaryService {
 
     final maps = await db.rawQuery(
       'SELECT word_tolaki, word_indo FROM dictionary '
-      'WHERE word_tolaki IN ($placeholders) AND language_code = ?',
-      queryArgs,
+      'WHERE (word_tolaki IN ($placeholders) OR word_indo IN ($placeholders)) AND kode_bahasa = ?',
+      [...queryArgs, _activeLang],
     );
 
-    final translationMap = <String, String>{
-      for (var row in maps)
-        row['word_tolaki'].toString(): row['word_indo'].toString(),
-    };
+    final translationMap = <String, String>{};
+    for (var row in maps) {
+      translationMap[row['word_tolaki'].toString().toLowerCase()] = row['word_indo'].toString();
+    }
 
-    return words
-        .map((word) {
-          final clean = word.replaceAll(RegExp(r'[^\w\s]'), '').toLowerCase();
-          return translationMap[clean] ?? word;
-        })
-        .join(' ');
+    return words.map((word) {
+      final clean = word.replaceAll(RegExp(r'[^\w\s]'), '').toLowerCase();
+      return translationMap[clean] ?? word;
+    }).join(' ');
   }
 
   Future<String> translateToLocal(String text) async {
@@ -208,36 +237,62 @@ class DictionaryService {
 
     final maps = await db.rawQuery(
       'SELECT word_indo, word_tolaki FROM dictionary '
-      'WHERE word_indo IN ($placeholders) AND language_code = ?',
-      queryArgs,
+      'WHERE (word_indo IN ($placeholders) OR word_tolaki IN ($placeholders)) AND kode_bahasa = ?',
+      [...queryArgs, _activeLang],
     );
 
-    final translationMap = <String, String>{
-      for (var row in maps)
-        row['word_indo'].toString(): row['word_tolaki'].toString(),
-    };
+    final translationMap = <String, String>{};
+    for (var row in maps) {
+      translationMap[row['word_indo'].toString().toLowerCase()] = row['word_tolaki'].toString();
+    }
 
-    return words
-        .map((word) {
-          final clean = word.replaceAll(RegExp(r'[^\w\s]'), '').toLowerCase();
-          return translationMap[clean] ?? word;
-        })
-        .join(' ');
+    return words.map((word) {
+      final clean = word.replaceAll(RegExp(r'[^\w\s]'), '').toLowerCase();
+      return translationMap[clean] ?? word;
+    }).join(' ');
   }
 
-  // ✅ SYNC translate — untuk UI layer (widget build, non-async context)
-  // Menggunakan hot cache O(1). Tidak memanggil DB sama sekali.
-  // Aman dipanggil dari build() dan method sync manapun.
+  // ✅ SYNC translate — untuk UI layer (PATCHED: PRESERVE PUNCTUATION & CASE)
   String translateSync(String text) {
     if (!isLoaded || _activeLang == 'id' || _syncCache.isEmpty) return text;
 
-    final words = text.split(RegExp(r'\s+'));
-    return words
-        .map((word) {
-          final clean = word.replaceAll(RegExp(r'[^\w\s]'), '').toLowerCase();
-          return _syncCache[clean] ?? word;
-        })
-        .join(' ');
+    try {
+      final regex = RegExp(r"(\w+)|([^\w]+)");
+      final matches = regex.allMatches(text);
+      
+      if (matches.isEmpty) return text;
+
+      final result = StringBuffer();
+      for (final match in matches) {
+        final part = match.group(0)!;
+        
+        if (RegExp(r"^\w+$").hasMatch(part)) {
+          final clean = part.toLowerCase();
+          final translated = _syncCache[clean];
+          
+          if (translated != null) {
+            // Preservasi Capitalization sederhana
+            if (part.length > 0 && part[0] == part[0].toUpperCase()) {
+              if (translated.length > 1) {
+                result.write(translated[0].toUpperCase() + translated.substring(1));
+              } else {
+                result.write(translated.toUpperCase());
+              }
+            } else {
+              result.write(translated);
+            }
+          } else {
+            result.write(part);
+          }
+        } else {
+          result.write(part);
+        }
+      }
+
+      return result.toString();
+    } catch (e) {
+      return text;
+    }
   }
 
   // Alias async (tetap ada untuk kompatibilitas AI pipeline)

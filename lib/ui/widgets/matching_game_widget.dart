@@ -3,12 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class MatchingGameWidget extends StatefulWidget {
-  final Map<String, dynamic> questionData;
+  final Map<String, dynamic> dataSoal;
   final Function(String answerJson, double correctnessRatio) onSubmit;
 
   const MatchingGameWidget({
     super.key,
-    required this.questionData,
+    required this.dataSoal,
     required this.onSubmit,
   });
 
@@ -44,8 +44,8 @@ class _MatchingGameWidgetState extends State<MatchingGameWidget> {
   }
 
   void _initializeGame() {
-    final pairs = widget.questionData['pairs'] as List? ?? [];
-    _correctPairs = widget.questionData['correct_pairs'] as List? ?? [];
+    final pairs = widget.dataSoal['pairs'] as List? ?? [];
+    _correctPairs = widget.dataSoal['correct_pairs'] as List? ?? [];
 
     for (var pair in pairs) {
       if (pair['left'] != null) _leftItems.add(pair['left']);
@@ -124,7 +124,7 @@ class _MatchingGameWidgetState extends State<MatchingGameWidget> {
         children: [
           // Instruksi Pertanyaan
           Text(
-            widget.questionData['question_text_indo'] ??
+            widget.dataSoal['teks_soal'] ??
                 'Pasangkan kotak kiri dan kanan.',
             style: GoogleFonts.plusJakartaSans(
               fontSize: 18,

@@ -54,21 +54,21 @@ class _ProgressScreenState extends State<ProgressScreen>
       final db = await DatabaseHelper.instance.database;
 
       // 1. Ambil ID User Aktif
-      final userResult = await db.query('users', limit: 1);
+      final userResult = await db.query('pengguna', limit: 1);
       if (userResult.isEmpty) throw Exception("User tidak ditemukan");
-      final int userId = userResult.first['id'] as int;
+      final int penggunaId = userResult.first['id'] as int;
 
       // 2. Agregasi Statistik Global ($O(1)$ query aggregation)
       final globalStats = await db.rawQuery(
         '''
         SELECT 
           COUNT(id) as total_q,
-          SUM(is_correct) as total_c,
-          SUM(time_spent_seconds) as total_t
-        FROM student_progress
-        WHERE user_id = ?
+          SUM(benar) as total_c,
+          SUM(waktu_detik) as total_t
+        FROM progres_siswa
+        WHERE pengguna_id = ?
       ''',
-        [userId],
+        [penggunaId],
       );
 
       if (globalStats.isNotEmpty) {
@@ -82,16 +82,16 @@ class _ProgressScreenState extends State<ProgressScreen>
       final weeklyStats = await db.rawQuery(
         '''
         SELECT 
-          substr(answered_at, 1, 10) as date,
+          substr(dijawab_pada, 1, 10) as date,
           COUNT(id) as daily_total,
-          SUM(is_correct) as daily_correct
-        FROM student_progress
-        WHERE user_id = ? AND answered_at IS NOT NULL
+          SUM(benar) as daily_correct
+        FROM progres_siswa
+        WHERE pengguna_id = ? AND dijawab_pada IS NOT NULL
         GROUP BY date
         ORDER BY date DESC
         LIMIT 7
       ''',
-        [userId],
+        [penggunaId],
       );
 
       _weeklyData = List<Map<String, dynamic>>.from(
@@ -102,16 +102,16 @@ class _ProgressScreenState extends State<ProgressScreen>
       final categoryStats = await db.rawQuery(
         '''
         SELECT 
-          m.category,
+          m.kategori,
           COUNT(sp.id) as total_answered,
-          SUM(sp.is_correct) as total_correct
-        FROM student_progress sp
-        JOIN questions q ON sp.question_id = q.id
-        JOIN materials m ON q.material_id = m.id
-        WHERE sp.user_id = ?
-        GROUP BY m.category
+          SUM(sp.benar) as total_correct
+        FROM progres_siswa sp
+        JOIN soal q ON sp.soal_id = q.id
+        JOIN materi m ON q.materi_id = m.id
+        WHERE sp.pengguna_id = ?
+        GROUP BY m.kategori
       ''',
-        [userId],
+        [penggunaId],
       );
 
       _categoryData = List<Map<String, dynamic>>.from(categoryStats);
@@ -431,7 +431,7 @@ class _ProgressScreenState extends State<ProgressScreen>
                   else
                     ..._categoryData.map((cat) {
                       String categoryName =
-                          cat['category'] as String? ?? "Umum";
+                          cat['kategori'] as String? ?? "Umum";
                       int tAns = (cat['total_answered'] as int?) ?? 0;
                       int tCor = (cat['total_correct'] as int?) ?? 0;
                       double catAcc = tAns > 0 ? tCor / tAns : 0;

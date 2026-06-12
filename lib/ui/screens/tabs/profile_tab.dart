@@ -7,6 +7,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:nusalearn/ui/screens/login_screen.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:provider/provider.dart';
+import 'package:nusalearn/logic/providers/auth_provider.dart';
+import 'package:nusalearn/core/services/dictionary_service.dart';
 
 // Import Core & API
 import 'package:nusalearn/core/api/api_client.dart';
@@ -39,6 +42,7 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
   // === LOGIKA INTI (TIDAK DISENTUH) ===
   String _userName = "Memuat...";
   String _school = "...";
+  String _userKelasText = "-";
   File? _localImage;
   String? _serverImageUrl;
 
@@ -68,32 +72,36 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
 
   void _loadUser() async {
     final db = await DatabaseHelper.instance.database;
-    final userResult = await db.query('users', limit: 1);
+    final userResult = await db.query('pengguna', limit: 1);
 
     if (userResult.isNotEmpty) {
       final user = userResult.first;
       setState(() {
         // ✅ FIX: Tambahkan 'as String?' agar tipe data sesuai
-        _userName = (user['name'] as String?) ?? "Siswa";
-        _school = (user['school_origin'] as String?) ?? "Belum ada sekolah";
+        _userName = (user['nama'] as String?) ?? "Siswa";
+        _school = (user['asal_sekolah'] as String?) ?? "Belum ada sekolah";
+        
+        // Membaca data kelas dari DB lokal
+        final userKelas = user['kelas'] as int?;
+        _userKelasText = userKelas != null ? userKelas.toString() : "-";
 
         String? localPath = user['local_image_path'] as String?;
         if (localPath != null && File(localPath).existsSync()) {
           _localImage = File(localPath);
         }
 
-        _serverImageUrl = user['image_url'] as String?;
+        _serverImageUrl = user['url_gambar'] as String?;
       });
 
       // Hitung Level & XP
-      int? userId = user['id'] as int?;
-      if (userId != null) {
+      int? penggunaId = user['id'] as int?;
+      if (penggunaId != null) {
         int calculatedLevel = await AdaptiveService().calculateStudentLevel(
-          userId,
+          penggunaId,
         );
         final xpResult = await db.rawQuery(
-          'SELECT COUNT(*) as total FROM student_progress WHERE user_id = ? AND is_correct = 1',
-          [userId],
+          'SELECT COUNT(*) as total FROM progres_siswa WHERE pengguna_id = ? AND benar = 1',
+          [penggunaId],
         );
         setState(() {
           _currentLevel = calculatedLevel;
@@ -139,9 +147,9 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
 
       // 4. UPDATE SQLITE (Data Utama)
       final db = await DatabaseHelper.instance.database;
-      await db.update('users', {
+      await db.update('pengguna', {
         'local_image_path': permanentFile.path,
-        'is_synced': 0, // Tandai butuh upload
+        'sinkron': 0, // Tandai butuh upload
       }, where: 'id IS NOT NULL');
 
       // 5. UPDATE UI INSTAN
@@ -186,14 +194,14 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('token');
-      await prefs.remove('user_id');
+      await prefs.remove('pengguna_id');
       await prefs.remove('is_logged_in');
 
       final db = await DatabaseHelper.instance.database;
 
       await db.transaction((txn) async {
-        await txn.delete('users');
-        await txn.delete('student_progress');
+        await txn.delete('pengguna');
+        await txn.delete('progres_siswa');
         await txn.delete('recent_materials');
       });
 
@@ -230,9 +238,9 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
     _showSnackBar("🔄 Memaksa Full Sync...");
     try {
       final db = await DatabaseHelper.instance.database;
-      final userList = await db.query('users', limit: 1);
+      final userList = await db.query('pengguna', limit: 1);
       final user = userList.isNotEmpty ? userList.first : null;
-      String userLang = user?['language_code'] as String? ?? 'id';
+      String userLang = user?['kode_bahasa'] as String? ?? 'id';
 
       await SyncService().syncAll(userLang, force: true);
 
@@ -403,6 +411,9 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
   // === UI BUILD ===
   @override
   Widget build(BuildContext context) {
+    // ✅ Listener untuk rebuild saat bahasa berubah
+    Provider.of<AuthProvider>(context);
+
     return Scaffold(
       backgroundColor: const Color(0xFF0F0F17),
       body: Stack(
@@ -427,7 +438,7 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
                   padding: const EdgeInsets.fromLTRB(24, 30, 24, 20),
                   child: Center(
                     child: Text(
-                      "Profil Saya",
+                      DictionaryService.instance.translateSync("Profil Saya"),
                       style: GoogleFonts.plusJakartaSans(
                         fontSize: 24,
                         fontWeight: FontWeight.w900,
@@ -453,7 +464,7 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
                         _buildSectionTitle("Akun & Keamanan"),
                         _buildMenuItem(
                           icon: Icons.person_rounded,
-                          title: "Edit Data Diri",
+                          title: DictionaryService.instance.translateSync("Edit Data Diri"),
                           bgColor: const Color(0xFFB3E5FF), // Blue
                           onTap: () => _navigateTo(const EditProfileScreen()),
                         ),
@@ -476,7 +487,7 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
                         _buildSectionTitle("Umum"),
                         _buildMenuItem(
                           icon: Icons.language_rounded,
-                          title: "Bahasa Aplikasi",
+                          title: DictionaryService.instance.translateSync("Bahasa Aplikasi"),
                           bgColor: kLime, // Teal/Lime
                           onTap: () => _navigateTo(const LanguageScreen()),
                         ),
@@ -568,10 +579,10 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
                     ),
                     const SizedBox(width: 12),
                     _buildStatBox(
-                      icon: Icons.verified_rounded,
+                      icon: Icons.school_rounded,
                       iconColor: const Color(0xFF2196F3),
-                      value: "12", // Data statis atau sesuaikan variabel
-                      label: "Selesai",
+                      value: _userKelasText,
+                      label: "Kelas",
                     ),
                   ],
                 ),

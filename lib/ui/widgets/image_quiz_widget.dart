@@ -5,12 +5,12 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:path_provider/path_provider.dart';
 
 class ImageQuizWidget extends StatefulWidget {
-  final Map<String, dynamic> questionData;
+  final Map<String, dynamic> dataSoal;
   final Function(String answerJson, double correctnessRatio) onSubmit;
 
   const ImageQuizWidget({
     super.key,
-    required this.questionData,
+    required this.dataSoal,
     required this.onSubmit,
   });
 
@@ -30,15 +30,40 @@ class _ImageQuizWidgetState extends State<ImageQuizWidget> {
   @override
   void initState() {
     super.initState();
-    _mainImageFilename = widget.questionData['main_image'] ?? "";
-    _tapAreas = widget.questionData['tap_areas'] ?? [];
+    _mainImageFilename = widget.dataSoal['main_image'] ?? "";
 
-    // Fallback: Di QuizGeneratorService menggunakan 'correct_area',
-    // tapi di SyncController kadang ditulis 'correct_answer'. Kita ambil yang mana saja yang ada.
+    // Support kedua format: 'tap_areas' (format lama) dan 'options' (format baru dari DB)
+    final rawAreas = widget.dataSoal['tap_areas'];
+    final rawOptions = widget.dataSoal['options'];
+
+    if (rawAreas != null && (rawAreas as List).isNotEmpty) {
+      _tapAreas = rawAreas;
+    } else if (rawOptions != null && (rawOptions as List).isNotEmpty) {
+      // Konversi format 'options' ke format 'tap_areas' yang diharapkan widget
+      _tapAreas = (rawOptions as List).map((opt) {
+        return {
+          'id': opt['id'] ?? '',
+          'label': opt['text'] ?? opt['label'] ?? 'Pilihan',
+        };
+      }).toList();
+    }
+
+    // Ambil jawaban benar dari berbagai kemungkinan kunci
     _correctAreaId =
-        widget.questionData['correct_area'] ??
-        widget.questionData['correct_answer'] ??
+        widget.dataSoal['correct_area'] ??
+        widget.dataSoal['correct_answer'] ??
+        widget.dataSoal['kunci_jawaban'] ??
         "";
+
+    // Fallback: cari dari is_correct di dalam options
+    if (_correctAreaId.isEmpty && rawOptions != null) {
+      for (var opt in rawOptions) {
+        if (opt['is_correct'] == true) {
+          _correctAreaId = opt['id'] ?? '';
+          break;
+        }
+      }
+    }
 
     _loadImageLocally();
   }
@@ -77,11 +102,11 @@ class _ImageQuizWidgetState extends State<ImageQuizWidget> {
   void _handleValidation() {
     if (_selectedAreaId == null) return;
 
-    bool isCorrect = (_selectedAreaId == _correctAreaId);
+    bool benar = (_selectedAreaId == _correctAreaId);
 
     String answerPayload = jsonEncode({'selected': _selectedAreaId});
     // Karena ini cuma klik 1 area, nilainya tetap absolut 1.0 atau 0.0
-    widget.onSubmit(answerPayload, isCorrect ? 1.0 : 0.0);
+    widget.onSubmit(answerPayload, benar ? 1.0 : 0.0);
   }
 
   @override
@@ -93,7 +118,7 @@ class _ImageQuizWidgetState extends State<ImageQuizWidget> {
         children: [
           // 1. Teks Pertanyaan
           Text(
-            widget.questionData['question_text_indo'] ??
+            widget.dataSoal['teks_soal'] ??
                 'Perhatikan gambar berikut dan pilih jawaban yang tepat.',
             style: GoogleFonts.plusJakartaSans(
               fontSize: 18,

@@ -6,6 +6,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:nusalearn/core/database/database_helper.dart';
 import 'package:nusalearn/core/services/adaptive_service.dart';
 import 'package:nusalearn/ui/screens/materi_detail_screen.dart';
+import 'package:provider/provider.dart';
+import 'package:nusalearn/logic/providers/auth_provider.dart';
+import 'package:nusalearn/core/services/dictionary_service.dart';
 
 // --- KONSTANTA NEO-BRUTALISM ---
 const Color kLime = Color(0xFFD2F945);
@@ -65,12 +68,12 @@ class _MateriTabState extends State<MateriTab> with TickerProviderStateMixin {
     final db = await DatabaseHelper.instance.database;
 
     // Ambil ID User
-    int userId = 0;
-    final userResult = await db.query('users', limit: 1);
-    if (userResult.isNotEmpty) userId = userResult.first['id'] as int;
+    int penggunaId = 0;
+    final userResult = await db.query('pengguna', limit: 1);
+    if (userResult.isNotEmpty) penggunaId = userResult.first['id'] as int;
 
     // Hitung Level Adaptif
-    int calculatedLevel = await AdaptiveService().calculateStudentLevel(userId);
+    int calculatedLevel = await AdaptiveService().calculateStudentLevel(penggunaId);
 
     // Filter Query
     String whereClause = 'is_deleted = 0';
@@ -78,16 +81,15 @@ class _MateriTabState extends State<MateriTab> with TickerProviderStateMixin {
 
     // Filter Kategori
     if (_selectedCategory != "Semua") {
-      whereClause += ' AND category LIKE ?';
+      whereClause += ' AND kategori LIKE ?';
       whereArgs.add(_selectedCategory);
     }
 
     // Filter Level (Adaptif)
-    whereClause += ' AND level_difficulty <= ?';
-    whereArgs.add(calculatedLevel);
+    
 
     final data = await db.query(
-      'materials',
+      'materi',
       where: whereClause,
       whereArgs: whereArgs,
       orderBy: 'id DESC',
@@ -248,6 +250,9 @@ class _MateriTabState extends State<MateriTab> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    // ✅ Tambahkan listener agar widget rebuild saat bahasa diganti
+    Provider.of<AuthProvider>(context);
+
     return Scaffold(
       backgroundColor: const Color(0xFF0F0F17), // Base dark frame if needed
       body: Stack(
@@ -330,7 +335,7 @@ class _MateriTabState extends State<MateriTab> with TickerProviderStateMixin {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            "Halo, $_username 👋",
+                            DictionaryService.instance.translateSync("Halo") + ", $_username 👋",
                             style: GoogleFonts.plusJakartaSans(
                               fontSize: 13,
                               fontWeight: FontWeight.w700,
@@ -386,7 +391,7 @@ class _MateriTabState extends State<MateriTab> with TickerProviderStateMixin {
                               ),
                               const SizedBox(width: 4),
                               Text(
-                                "AI AKTIF",
+                                DictionaryService.instance.translateSync("AI AKTIF"),
                                 style: GoogleFonts.plusJakartaSans(
                                   fontSize: 11,
                                   fontWeight: FontWeight.w900,
@@ -452,7 +457,7 @@ class _MateriTabState extends State<MateriTab> with TickerProviderStateMixin {
                                         CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        "LEVEL KAMU SAAT INI",
+                                        DictionaryService.instance.translateSync("LEVEL KAMU SAAT INI"),
                                         style: GoogleFonts.plusJakartaSans(
                                           fontSize: 12,
                                           fontWeight: FontWeight.w900,
@@ -679,8 +684,11 @@ class _MateriTabState extends State<MateriTab> with TickerProviderStateMixin {
                                 index,
                               ) {
                                 final item = _materials[index];
+                                final isLocked = (item['tingkat_kesulitan'] as int) > _studentLevel;
                                 return GestureDetector(
-                                  onTap: () {
+                                  onTap: isLocked ? () {
+                                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Materi ini terkunci! Kumpulkan lebih banyak poin di level sebelumnya.')));
+                                  } : () {
                                     Navigator.push(
                                       context,
                                       MaterialPageRoute(
@@ -692,6 +700,7 @@ class _MateriTabState extends State<MateriTab> with TickerProviderStateMixin {
                                   child: _MaterialCard(
                                     item: item,
                                     index: index,
+                                    isLocked: isLocked,
                                   ),
                                 );
                               }, childCount: _materials.length),
@@ -717,8 +726,9 @@ class _MateriTabState extends State<MateriTab> with TickerProviderStateMixin {
 class _MaterialCard extends StatelessWidget {
   final Map<String, dynamic> item;
   final int index;
+  final bool isLocked;
 
-  const _MaterialCard({super.key, required this.item, required this.index});
+  const _MaterialCard({super.key, required this.item, required this.index, this.isLocked = false});
 
   @override
   Widget build(BuildContext context) {
@@ -774,6 +784,18 @@ class _MaterialCard extends StatelessWidget {
                             ),
                     ),
                   ),
+                                    if (isLocked)
+                    Positioned.fill(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: kBlack.withOpacity(0.6),
+                          borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+                        ),
+                        child: const Center(
+                          child: Icon(Icons.lock_rounded, color: kWhite, size: 48),
+                        ),
+                      ),
+                    ),
                   Positioned(
                     top: 10,
                     left: 10,
@@ -791,7 +813,7 @@ class _MaterialCard extends StatelessWidget {
                         ],
                       ),
                       child: Text(
-                        (item['category'] ?? 'UMUM').toString().toUpperCase(),
+                        (item['kategori'] ?? 'UMUM').toString().toUpperCase(),
                         style: GoogleFonts.plusJakartaSans(
                           fontSize: 9,
                           fontWeight: FontWeight.w900,
@@ -813,7 +835,9 @@ class _MaterialCard extends StatelessWidget {
               mainAxisSize: MainAxisSize.min, // Kunci utama mencegah overflow
               children: [
                 Text(
-                  item['title_indo'] ?? 'Tanpa Judul',
+                  DictionaryService.instance.translateSync(
+                    item['judul'] ?? 'Tanpa Judul',
+                  ),
                   style: GoogleFonts.plusJakartaSans(
                     fontWeight: FontWeight.w800,
                     fontSize: 13,
@@ -848,7 +872,7 @@ class _MaterialCard extends StatelessWidget {
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            "Lv ${item['level_difficulty'] ?? 1}",
+                            "Lv ${item['tingkat_kesulitan'] ?? 1}",
                             style: GoogleFonts.plusJakartaSans(
                               color: kBlack,
                               fontSize: 10,

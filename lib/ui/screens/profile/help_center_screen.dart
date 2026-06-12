@@ -145,7 +145,7 @@ class HelpCenterScreen extends StatelessWidget {
                         ),
                         _buildFaqItem(
                           "Lupa kata sandi akun",
-                          "Jika kamu lupa sandi, silakan hubungi admin melalui WhatsApp atau Email di bawah ini untuk reset password.",
+                          "Jika kamu lupa sandi, silakan hubungi admin melalui WhatsApp atau Email di bawah ini untuk reset kata_sandi.",
                         ),
                         _buildFaqItem(
                           "Bagaimana mengganti bahasa?",

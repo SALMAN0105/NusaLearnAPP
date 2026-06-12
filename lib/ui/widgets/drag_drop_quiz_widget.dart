@@ -1,14 +1,16 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:path_provider/path_provider.dart';
 
 class DragDropQuizWidget extends StatefulWidget {
-  final Map<String, dynamic> questionData;
+  final Map<String, dynamic> dataSoal;
   final Function(String answerJson, double correctnessRatio) onSubmit;
 
   const DragDropQuizWidget({
     super.key,
-    required this.questionData,
+    required this.dataSoal,
     required this.onSubmit,
   });
 
@@ -19,6 +21,7 @@ class DragDropQuizWidget extends StatefulWidget {
 class _DragDropQuizWidgetState extends State<DragDropQuizWidget> {
   // State untuk menyimpan posisi item: { itemId: zoneId }
   final Map<String, String> _placedItems = {};
+  final Map<String, File> _localImages = {};
 
   List<dynamic> _items = [];
   List<dynamic> _zones = [];
@@ -27,9 +30,23 @@ class _DragDropQuizWidgetState extends State<DragDropQuizWidget> {
   @override
   void initState() {
     super.initState();
-    _items = widget.questionData['items'] ?? [];
-    _zones = widget.questionData['zones'] ?? [];
-    _correctMapping = widget.questionData['correct_mapping'] ?? {};
+    _items = widget.dataSoal['items'] ?? [];
+    _zones = widget.dataSoal['zones'] ?? [];
+    _correctMapping = widget.dataSoal['correct_mapping'] ?? {};
+    _loadImages();
+  }
+
+  Future<void> _loadImages() async {
+    final dir = await getApplicationDocumentsDirectory();
+    for (var item in _items) {
+      if (item['image_asset'] != null) {
+        final file = File('${dir.path}/${item['image_asset']}');
+        if (await file.exists()) {
+          _localImages[item['id']] = file;
+        }
+      }
+    }
+    if (mounted) setState(() {});
   }
 
   void _handleValidation() {
@@ -65,7 +82,7 @@ class _DragDropQuizWidgetState extends State<DragDropQuizWidget> {
         children: [
           // Instruksi Pertanyaan
           Text(
-            widget.questionData['question_text_indo'] ??
+            widget.dataSoal['teks_soal'] ??
                 'Pasangkan item ke zona yang tepat.',
             style: GoogleFonts.plusJakartaSans(
               fontSize: 18,
@@ -175,7 +192,7 @@ class _DragDropQuizWidgetState extends State<DragDropQuizWidget> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                zone['label'] ?? 'Zona',
+                zone['label'] is Map ? (zone['label']['label'] ?? 'Zona') : (zone['label'] ?? 'Zona'),
                 style: GoogleFonts.plusJakartaSans(
                   fontSize: 14,
                   fontWeight: FontWeight.w900,
@@ -225,13 +242,19 @@ class _DragDropQuizWidgetState extends State<DragDropQuizWidget> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: const [BoxShadow(color: Colors.black, offset: Offset(2, 2))],
       ),
-      child: Text(
-        item['text'],
-        style: GoogleFonts.plusJakartaSans(
-          fontWeight: FontWeight.w800,
-          color: Colors.black,
-        ),
-      ),
+      child: item['text'] != null 
+        ? Text(
+            item['text'],
+            style: GoogleFonts.plusJakartaSans(
+              fontWeight: FontWeight.w800,
+              color: Colors.black,
+            ),
+          )
+        : (item['image_asset'] != null 
+            ? (_localImages[item['id']] != null 
+                ? Image.file(_localImages[item['id']]!, height: 60, width: 60, fit: BoxFit.cover)
+                : const SizedBox(height: 60, width: 60, child: Center(child: CircularProgressIndicator(strokeWidth: 2))))
+            : const Text("Kosong")),
     );
 
     return Draggable<String>(
@@ -267,14 +290,18 @@ class _DragDropQuizWidgetState extends State<DragDropQuizWidget> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              item['text'],
-              style: GoogleFonts.plusJakartaSans(
-                fontWeight: FontWeight.w800,
-                fontSize: 13,
-                color: Colors.black,
-              ),
-            ),
+            item['text'] != null
+                ? Text(
+                    item['text'],
+                    style: GoogleFonts.plusJakartaSans(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 13,
+                      color: Colors.black,
+                    ),
+                  )
+                : (_localImages[item['id']] != null
+                    ? Image.file(_localImages[item['id']]!, height: 30, width: 30, fit: BoxFit.cover)
+                    : const SizedBox(height: 30, width: 30, child: CircularProgressIndicator(strokeWidth: 2))),
             const SizedBox(width: 8),
             const Icon(Icons.close_rounded, size: 14, color: Colors.black54),
           ],

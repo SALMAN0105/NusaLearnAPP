@@ -8,25 +8,25 @@ import 'dart:convert';
 
 class MaterialModel {
   final int id;
-  final String titleIndo;
-  final String? imageUrl;
+  final String judul;
+  final String? urlGambar;
   final String? localImagePath;
-  final int levelDifficulty;
-  final String languageCode;
+  final int tingkatKesulitan;
+  final String kodeBahasa;
   final String contentJson;
   final String? aiEmbeddings;
-  final String aiStatus;
+  final String statusAi;
 
   MaterialModel({
     required this.id,
-    required this.titleIndo,
-    this.imageUrl,
+    required this.judul,
+    this.urlGambar,
     this.localImagePath,
-    required this.levelDifficulty,
-    required this.languageCode,
+    required this.tingkatKesulitan,
+    required this.kodeBahasa,
     required this.contentJson,
     this.aiEmbeddings,
-    this.aiStatus = 'pending',
+    this.statusAi = 'pending',
   });
 
   /// Getter: Parse ai_embeddings secara aman
@@ -46,7 +46,7 @@ class MaterialModel {
     }
 
     // Prioritas 2: Bangun metadata minimal dari content_json
-    // Ini terjadi saat backend belum generate ai_embeddings (ai_status: pending)
+    // Ini terjadi saat backend belum generate ai_embeddings (status_ai: pending)
     return _buildFallbackMetadataFromContent();
   }
 
@@ -108,7 +108,7 @@ class MaterialModel {
       return {
         'schema_version': 'fallback_1.0',
         'knowledge_base': {
-          'summary': summary.isEmpty ? 'Materi: $titleIndo' : summary,
+          'summary': summary.isEmpty ? 'Materi: $judul' : summary,
           'detailed_summary': rawText,
           'concepts': [],
           'glossary': [],
@@ -239,28 +239,28 @@ class MaterialModel {
 
     return MaterialModel(
       id: map['id'],
-      titleIndo: map['title_indo'] ?? '',
-      imageUrl: map['image_url'],
+      judul: map['judul'] ?? '',
+      urlGambar: map['url_gambar'],
       localImagePath: map['local_image_path'],
-      levelDifficulty: map['level_difficulty'] ?? 1,
-      languageCode: map['language_code'] ?? 'id',
-      contentJson: map['content_json'] ?? map['content_indo'] ?? '',
+      tingkatKesulitan: map['tingkat_kesulitan'] ?? 1,
+      kodeBahasa: map['kode_bahasa'] ?? 'id',
+      contentJson: map['content_json'] ?? map['konten'] ?? '',
       aiEmbeddings: aiEmb,
-      aiStatus: map['ai_status'] ?? 'pending',
+      statusAi: map['status_ai'] ?? 'pending',
     );
   }
 
   Map<String, dynamic> toMap() {
     return {
       'id': id,
-      'title_indo': titleIndo,
-      'image_url': imageUrl,
+      'judul': judul,
+      'url_gambar': urlGambar,
       'local_image_path': localImagePath,
-      'level_difficulty': levelDifficulty,
-      'language_code': languageCode,
+      'tingkat_kesulitan': tingkatKesulitan,
+      'kode_bahasa': kodeBahasa,
       'content_json': contentJson,
       'ai_embeddings': aiEmbeddings,
-      'ai_status': aiStatus,
+      'status_ai': statusAi,
     };
   }
 }

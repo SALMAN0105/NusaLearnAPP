@@ -7,6 +7,9 @@ import 'package:nusalearn/core/database/database_helper.dart';
 import 'package:nusalearn/ui/widgets/json_material_renderer.dart';
 import 'package:nusalearn/ui/widgets/ai_chat_sheet.dart';
 import 'package:nusalearn/models/material_model.dart';
+import 'package:provider/provider.dart';
+import 'package:nusalearn/logic/providers/auth_provider.dart';
+import 'package:nusalearn/core/services/dictionary_service.dart';
 
 // --- KONSTANTA NEO-BRUTALISM ---
 const Color kLime = Color(0xFFD2F945);
@@ -35,14 +38,14 @@ class _MateriDetailScreenState extends State<MateriDetailScreen> {
   Future<void> _recordHistory() async {
     final db = await DatabaseHelper.instance.database;
 
-    final userResult = await db.query('users', limit: 1);
+    final userResult = await db.query('pengguna', limit: 1);
     if (userResult.isNotEmpty) {
-      int userId = userResult.first['id'] as int;
+      int penggunaId = userResult.first['id'] as int;
       String now = DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now());
 
       await db.insert('recent_materials', {
-        'user_id': userId,
-        'material_id': widget.material['id'],
+        'pengguna_id': penggunaId,
+        'materi_id': widget.material['id'],
         'last_accessed': now,
       }, conflictAlgorithm: ConflictAlgorithm.replace);
 
@@ -53,6 +56,9 @@ class _MateriDetailScreenState extends State<MateriDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // ✅ Tambahkan listener agar widget rebuild saat bahasa diganti
+    Provider.of<AuthProvider>(context);
+
     final String? localPath = widget.material['local_image_path'];
     final bool hasCover = localPath != null && File(localPath).existsSync();
 
@@ -90,7 +96,9 @@ class _MateriDetailScreenState extends State<MateriDetailScreen> {
             flexibleSpace: FlexibleSpaceBar(
               centerTitle: true,
               title: Text(
-                widget.material['title_indo'],
+                DictionaryService.instance.translateSync(
+                  widget.material['judul'],
+                ),
                 style: GoogleFonts.plusJakartaSans(
                   color: kWhite,
                   fontWeight: FontWeight.w900,
@@ -135,21 +143,23 @@ class _MateriDetailScreenState extends State<MateriDetailScreen> {
                   Row(
                     children: [
                       _buildBadge(
-                        (widget.material['category'] ?? '-')
+                        (widget.material['kategori'] ?? '-')
                             .toString()
                             .toUpperCase(),
                         const Color(0xFFFFDEB3), // Warna orange pastel
                       ),
                       const SizedBox(width: 8),
                       _buildBadge(
-                        "LEVEL ${widget.material['level_difficulty']}",
+                        "LEVEL ${widget.material['tingkat_kesulitan']}",
                         const Color(0xFFB3E5FF), // Warna biru pastel
                       ),
                     ],
                   ),
                   const SizedBox(height: 20),
                   Text(
-                    widget.material['title_indo'],
+                    DictionaryService.instance.translateSync(
+                      widget.material['judul'],
+                    ),
                     style: GoogleFonts.plusJakartaSans(
                       fontSize: 24,
                       fontWeight: FontWeight.w900,
@@ -162,7 +172,7 @@ class _MateriDetailScreenState extends State<MateriDetailScreen> {
                   Container(height: 2, color: kBlack, width: double.infinity),
                   const SizedBox(height: 16),
                   JsonMaterialRenderer(
-                    contentJson: widget.material['content_json'] ?? '[]',
+                    contentJson: widget.material['konten'] ?? '[]',
                   ),
                   const SizedBox(height: 100), // Extra space untuk FAB
                 ],

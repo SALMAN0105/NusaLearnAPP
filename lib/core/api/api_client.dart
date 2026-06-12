@@ -1,8 +1,16 @@
+import 'dart:io';
 import 'package:dio/dio.dart';
+import 'package:dio/io.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiClient {
-  static const String baseUrl = 'http://10.82.44.182:8000/api/';
+  static const String pcIpAddress = '10.108.211.182';
+
+  // Gunakan HTTP untuk menghindari error 421 SNI mismatch di Nginx/Flyenv
+  static const String baseUrl = 'http://$pcIpAddress/api/';
+
+  // Domain Flyenv Anda
+  static const String hostDomain = 'nusalearn.test';
 
   static Dio getClient() {
     final dio = Dio(
@@ -13,8 +21,21 @@ class ApiClient {
         headers: {
           'Accept': 'application/json',
           'Content-Type': 'application/json',
+          'Host': hostDomain,
         },
       ),
+    );
+
+    // Bypass SSL Certificate Error.
+    // Karena kita hit IP lokal (https://192.168...), sertifikat Flyenv nusalearn.test akan dianggap tidak valid.
+    // Kode ini membuat aplikasi tetap mengizinkan koneksi tersebut.
+    dio.httpClientAdapter = IOHttpClientAdapter(
+      createHttpClient: () {
+        final client = HttpClient();
+        client.badCertificateCallback =
+            (X509Certificate cert, String host, int port) => true;
+        return client;
+      },
     );
 
     dio.interceptors.add(

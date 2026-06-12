@@ -24,12 +24,12 @@ const Color _kWhite = Color(0xFFFFFFFF);
 const double _kBorderWidth = 1.5;
 
 class QuizScreen extends StatefulWidget {
-  final int materialId;
+  final int materiId;
   final String materialTitle;
 
   const QuizScreen({
     super.key,
-    required this.materialId,
+    required this.materiId,
     required this.materialTitle,
   });
 
@@ -52,6 +52,8 @@ class _QuizScreenState extends State<QuizScreen> {
   bool _isReviewMode = false; // Mode Pembahasan aktif
   Map<int, dynamic> _studentAnswersCache =
       {}; // Menyimpan jawaban siswa untuk Review
+  bool _hasLeveledUp = false;
+  bool _showLevelUpOverlay = false;
 
   AudioPlayer? _bgmPlayer;
   AudioPlayer? _sfxPlayer;
@@ -65,17 +67,17 @@ class _QuizScreenState extends State<QuizScreen> {
   void _loadQuestions() async {
     final db = await DatabaseHelper.instance.database;
 
-    int userId = 0;
-    final userResult = await db.query('users', limit: 1);
-    if (userResult.isNotEmpty) userId = userResult.first['id'] as int;
+    int penggunaId = 0;
+    final userResult = await db.query('pengguna', limit: 1);
+    if (userResult.isNotEmpty) penggunaId = userResult.first['id'] as int;
 
-    int calculatedLevel = await AdaptiveService().calculateStudentLevel(userId);
+    int calculatedLevel = await AdaptiveService().calculateStudentLevel(penggunaId);
 
     final result = await db.query(
-      'questions',
-      where: 'material_id = ? AND is_deleted = 0 AND difficulty_weight <= ?',
-      whereArgs: [widget.materialId, calculatedLevel],
-      orderBy: 'difficulty_weight ASC',
+      'soal',
+      where: 'materi_id = ? AND is_deleted = 0 AND bobot_kesulitan <= ?',
+      whereArgs: [widget.materiId, calculatedLevel],
+      orderBy: 'bobot_kesulitan ASC',
     );
 
     setState(() {
@@ -117,6 +119,16 @@ class _QuizScreenState extends State<QuizScreen> {
     }
   }
 
+  Future<void> _playLevelUpSfx() async {
+    try {
+      await _bgmPlayer?.pause();
+      _sfxPlayer ??= AudioPlayer();
+      await _sfxPlayer!.play(AssetSource('audio/level-up.mp3'));
+    } catch (e) {
+      debugPrint("Gagal memutar SFX level up: $e");
+    }
+  }
+
   // --- SUBMIT LOGIC (Diperbarui dengan Delay & Animasi) ---
   Future<void> _submitAnswer(String selectedKey, String correctKey) async {
     if (_showFeedbackOverlay || _isReviewMode) return;
@@ -138,61 +150,61 @@ class _QuizScreenState extends State<QuizScreen> {
 
     _score += ratio; // Injeksi nilai parsial ke skor akhir
 
-    String templateType =
-        _questions[_currentIndex]['template_type'] ?? 'multiple_choice';
+    String tipeTemplate =
+        _questions[_currentIndex]['tipe_template'] ?? 'multiple_choice';
     _studentAnswersCache[_questions[_currentIndex]['id']] = answerJsonPayload;
 
-    await _saveProgressToDb(answerJsonPayload, ratio, templateType);
+    await _saveProgressToDb(answerJsonPayload, ratio, tipeTemplate);
     await _showFeedbackAndNext(ratio); // Kirim rasio untuk evaluasi animasi
   }
 
   Future<void> _saveProgressToDb(
-    dynamic answerData,
+    dynamic dataJawaban,
     double ratio,
-    String templateType,
+    String tipeTemplate,
   ) async {
     final db = await DatabaseHelper.instance.database;
-    final userResult = await db.query('users', limit: 1);
+    final userResult = await db.query('pengguna', limit: 1);
     if (userResult.isEmpty) return;
 
-    int userId = userResult.first['id'] as int;
-    int questionId = _questions[_currentIndex]['id'];
+    int penggunaId = userResult.first['id'] as int;
+    int soalId = _questions[_currentIndex]['id'];
     String now = DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now());
 
-    // Konversi rasio ke boolean database (Jika > 0 berarti dia setidaknya mendapat poin)
-    int isCorrectDb = (ratio > 0) ? 1 : 0;
+    // Konversi rasio ke boolean database (Hanya benar jika semua jawaban tepat)
+    int isCorrectDb = (ratio >= 1.0) ? 1 : 0;
 
     final existing = await db.query(
-      'student_progress',
-      where: 'user_id = ? AND question_id = ?',
-      whereArgs: [userId, questionId],
+      'progres_siswa',
+      where: 'pengguna_id = ? AND soal_id = ?',
+      whereArgs: [penggunaId, soalId],
     );
 
     if (existing.isEmpty) {
-      await db.insert('student_progress', {
-        'user_id': userId,
-        'question_id': questionId,
-        'student_answer': (answerData is String)
-            ? answerData
-            : jsonEncode(answerData),
-        'is_correct': isCorrectDb,
-        'answered_at': now,
-        'template_type': templateType,
-        'is_synced': 0,
+      await db.insert('progres_siswa', {
+        'pengguna_id': penggunaId,
+        'soal_id': soalId,
+        'jawaban_siswa': (dataJawaban is String)
+            ? dataJawaban
+            : jsonEncode(dataJawaban),
+        'benar': isCorrectDb,
+        'dijawab_pada': now,
+        'tipe_template': tipeTemplate,
+        'sinkron': 0,
       });
-    } else if (isCorrectDb == 1 || existing.first['is_correct'] == 0) {
+    } else if (isCorrectDb == 1 || existing.first['benar'] == 0) {
       await db.update(
-        'student_progress',
+        'progres_siswa',
         {
-          'student_answer': (answerData is String)
-              ? answerData
-              : jsonEncode(answerData),
-          'is_correct': isCorrectDb,
-          'answered_at': now,
-          'is_synced': 0,
+          'jawaban_siswa': (dataJawaban is String)
+              ? dataJawaban
+              : jsonEncode(dataJawaban),
+          'benar': isCorrectDb,
+          'dijawab_pada': now,
+          'sinkron': 0,
         },
-        where: 'user_id = ? AND question_id = ?',
-        whereArgs: [userId, questionId],
+        where: 'pengguna_id = ? AND soal_id = ?',
+        whereArgs: [penggunaId, soalId],
       );
     }
   }
@@ -200,7 +212,7 @@ class _QuizScreenState extends State<QuizScreen> {
   // --- FEEDBACK ANIMATION SEQUENCER ---
   Future<void> _showFeedbackAndNext(double ratio) async {
     bool isPassedAnimation =
-        ratio > 0; // Jika salah semua (0.0) baru animasi fail
+        ratio >= 1.0; // Hanya animasi sukses jika semua jawaban benar
 
     setState(() {
       _isCurrentCorrect = isPassedAnimation;
@@ -213,15 +225,42 @@ class _QuizScreenState extends State<QuizScreen> {
 
     if (!mounted) return;
 
-    setState(() {
-      _showFeedbackOverlay = false;
-      if (_currentIndex < _questions.length - 1) {
+    if (_currentIndex < _questions.length - 1) {
+      setState(() {
+        _showFeedbackOverlay = false;
         _currentIndex++;
-        _bgmPlayer?.resume();
-      } else {
+      });
+      _bgmPlayer?.resume();
+    } else {
+      // Periksa kenaikan level
+      int penggunaId = 0;
+      final db = await DatabaseHelper.instance.database;
+      final userResult = await db.query('pengguna', limit: 1);
+      if (userResult.isNotEmpty) penggunaId = userResult.first['id'] as int;
+      
+      int newLevel = await AdaptiveService().calculateStudentLevel(penggunaId);
+      bool leveledUp = newLevel > _studentLevel;
+
+      setState(() {
+        _showFeedbackOverlay = false;
         _isFinished = true;
+        _hasLeveledUp = leveledUp;
+        if (leveledUp) {
+          _studentLevel = newLevel;
+          _showLevelUpOverlay = true;
+        }
+      });
+
+      if (leveledUp) {
+        _playLevelUpSfx();
+        await Future.delayed(const Duration(milliseconds: 3500));
+        if (mounted) {
+          setState(() {
+            _showLevelUpOverlay = false;
+          });
+        }
       }
-    });
+    }
   }
 
   String _smartTranslate(BuildContext context, String text) {
@@ -307,6 +346,63 @@ class _QuizScreenState extends State<QuizScreen> {
                       repeat: false,
                     ),
                   ),
+
+                // OVERLAY LEVEL UP
+                if (_showLevelUpOverlay)
+                  GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _showLevelUpOverlay = false;
+                      });
+                    },
+                    child: Container(
+                      color: Colors.black.withOpacity(0.85),
+                      alignment: Alignment.center,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Lottie.asset(
+                            "assets/animasi/level-up.json",
+                            width: 300,
+                            height: 300,
+                            fit: BoxFit.contain,
+                            repeat: false,
+                          ),
+                          const SizedBox(height: 24),
+                          Text(
+                            "LEVEL UP!",
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 40,
+                              fontWeight: FontWeight.w900,
+                              color: _kLime,
+                              letterSpacing: 2,
+                              shadows: const [
+                                Shadow(color: _kBlack, offset: Offset(3, 3))
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            "Kamu sekarang berada di Level $_studentLevel",
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              color: _kWhite,
+                            ),
+                          ),
+                          const SizedBox(height: 32),
+                          Text(
+                            "Ketuk untuk melanjutkan",
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: _kWhite.withOpacity(0.7),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
               ],
             ),
     );
@@ -349,17 +445,17 @@ class _QuizScreenState extends State<QuizScreen> {
 
   Widget _buildQuestionUI() {
     final question = _questions[_currentIndex];
-    String templateType = question['template_type'] ?? 'multiple_choice';
-    int difficultyWeight = question['difficulty_weight'] ?? 1;
+    String tipeTemplate = question['tipe_template'] ?? 'multiple_choice';
+    int bobotKesulitan = question['bobot_kesulitan'] ?? 1;
     double progress = (_currentIndex) / _questions.length;
 
     // Parsing AI Explanation dari database
     String aiExplanation = "";
     try {
-      if (question['question_data'] != null) {
-        var parsedData = (question['question_data'] is String)
-            ? jsonDecode(question['question_data'])
-            : question['question_data'];
+      if (question['data_soal'] != null) {
+        var parsedData = (question['data_soal'] is String)
+            ? jsonDecode(question['data_soal'])
+            : question['data_soal'];
         aiExplanation =
             parsedData['explanation'] ?? "Tidak ada pembahasan tersedia.";
       }
@@ -399,8 +495,8 @@ class _QuizScreenState extends State<QuizScreen> {
               children: [
                 _dispatchQuestionTemplate(
                   question,
-                  templateType,
-                  difficultyWeight,
+                  tipeTemplate,
+                  bobotKesulitan,
                 ),
 
                 // --- POST-QUIZ REVIEW BOX ---
@@ -502,50 +598,50 @@ class _QuizScreenState extends State<QuizScreen> {
 
   Widget _dispatchQuestionTemplate(
     Map<String, dynamic> question,
-    String templateType,
-    int difficultyWeight,
+    String tipeTemplate,
+    int bobotKesulitan,
   ) {
     // Inject _isReviewMode ke child (Anda perlu menyesuaikan child widgets nanti jika butuh read-only absolute)
     // Untuk saat ini, fungsi pointer disable via IgnorePointer adalah trik paling aman di Flutter.
     Widget childUI;
-    switch (templateType) {
+    switch (tipeTemplate) {
       case 'multiple_choice':
-        childUI = _buildMultipleChoiceUI(question, difficultyWeight);
+        childUI = _buildMultipleChoiceUI(question, bobotKesulitan);
         break;
       case 'drag_and_drop':
         childUI = DragDropQuizWidget(
-          questionData: question['question_data'] is String
-              ? jsonDecode(question['question_data'])
-              : (question['question_data'] ?? {}),
+          dataSoal: question['data_soal'] is String
+              ? jsonDecode(question['data_soal'])
+              : (question['data_soal'] ?? {}),
           onSubmit: _submitMultimediaAnswer,
         );
         break;
       case 'matching_game':
         childUI = MatchingGameWidget(
-          questionData: question['question_data'] is String
-              ? jsonDecode(question['question_data'])
-              : (question['question_data'] ?? {}),
+          dataSoal: question['data_soal'] is String
+              ? jsonDecode(question['data_soal'])
+              : (question['data_soal'] ?? {}),
           onSubmit: _submitMultimediaAnswer,
         );
         break;
       case 'fill_blank':
         childUI = FillBlankQuizWidget(
-          questionData: question['question_data'] is String
-              ? jsonDecode(question['question_data'])
-              : (question['question_data'] ?? {}),
+          dataSoal: question['data_soal'] is String
+              ? jsonDecode(question['data_soal'])
+              : (question['data_soal'] ?? {}),
           onSubmit: _submitMultimediaAnswer,
         );
         break;
       case 'image_quiz':
         childUI = ImageQuizWidget(
-          questionData: question['question_data'] is String
-              ? jsonDecode(question['question_data'])
-              : (question['question_data'] ?? {}),
+          dataSoal: question['data_soal'] is String
+              ? jsonDecode(question['data_soal'])
+              : (question['data_soal'] ?? {}),
           onSubmit: _submitMultimediaAnswer,
         );
         break;
       default:
-        childUI = _buildMultipleChoiceUI(question, difficultyWeight);
+        childUI = _buildMultipleChoiceUI(question, bobotKesulitan);
     }
 
     // Jika mode review, matikan semua interaksi ketukan
@@ -560,22 +656,22 @@ class _QuizScreenState extends State<QuizScreen> {
 
   Widget _buildMultipleChoiceUI(
     Map<String, dynamic> question,
-    int difficultyWeight,
+    int bobotKesulitan,
   ) {
     String questionText = _smartTranslate(
       context,
-      question['question_text_indo'],
+      question['teks_soal'],
     );
     List<dynamic> options = [];
     try {
-      options = (question['options_json'] is String)
-          ? jsonDecode(question['options_json'])
-          : (question['options_json'] ?? []);
+      options = (question['opsi_json'] is String)
+          ? jsonDecode(question['opsi_json'])
+          : (question['opsi_json'] ?? []);
     } catch (e) {
       options = [];
     }
 
-    String correctKey = question['correct_answer_key'] ?? '';
+    String correctKey = question['kunci_jawaban'] ?? '';
     String? userSavedAnswer = _studentAnswersCache[question['id']];
 
     return Padding(
@@ -614,7 +710,7 @@ class _QuizScreenState extends State<QuizScreen> {
                   vertical: 4,
                 ),
                 decoration: BoxDecoration(
-                  color: _getDifficultyColor(difficultyWeight),
+                  color: _getDifficultyColor(bobotKesulitan),
                   border: Border.all(color: _kBlack, width: 1.5),
                   borderRadius: BorderRadius.circular(8),
                   boxShadow: const [
@@ -630,7 +726,7 @@ class _QuizScreenState extends State<QuizScreen> {
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      "Bobot $difficultyWeight",
+                      "Bobot $bobotKesulitan",
                       style: GoogleFonts.plusJakartaSans(
                         fontSize: 11,
                         fontWeight: FontWeight.w900,

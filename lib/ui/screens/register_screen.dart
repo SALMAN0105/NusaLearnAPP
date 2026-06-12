@@ -18,6 +18,7 @@ class _RegisterScreenState extends State<RegisterScreen>
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   final _schoolController = TextEditingController();
+  final _kelasController = TextEditingController();
   final _postalCodeController = TextEditingController();
 
   // Animasi Melayang (Vektor)
@@ -109,12 +110,18 @@ class _RegisterScreenState extends State<RegisterScreen>
       return;
     }
 
+    if (_kelasController.text.isEmpty) {
+      showCustomSnackbar(context, "Pilih kelasmu dulu!", isError: true);
+      return;
+    }
+
     final data = {
-      'name': _nameController.text,
-      'username': _usernameController.text,
-      'password': _passwordController.text,
-      'school_origin': _schoolController.text,
-      'postal_code': _postalCodeController.text,
+      'nama': _nameController.text,
+      'nama_pengguna': _usernameController.text,
+      'kata_sandi': _passwordController.text,
+      'asal_sekolah': _schoolController.text,
+      'kode_pos': _postalCodeController.text,
+      'kelas': int.tryParse(_kelasController.text) ?? 1,
     };
 
     bool success = await auth.register(data);
@@ -130,7 +137,7 @@ class _RegisterScreenState extends State<RegisterScreen>
       if (mounted) {
         showCustomSnackbar(
           context,
-          "Yah, Gagal Daftar. Coba username lain!",
+          "Yah, Gagal Daftar. Coba nama_pengguna lain!",
           isError: true,
         );
       }
@@ -217,10 +224,8 @@ class _RegisterScreenState extends State<RegisterScreen>
                                       letterSpacing: -1,
                                     ),
                                   ),
-                                  Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.baseline,
-                                    textBaseline: TextBaseline.alphabetic,
+                                  Wrap(
+                                    crossAxisAlignment: WrapCrossAlignment.end,
                                     children: [
                                       Text(
                                         'Teman ',
@@ -342,6 +347,74 @@ class _RegisterScreenState extends State<RegisterScreen>
                               icon: Icons.lock_rounded,
                               isPassword: true,
                             ),
+                            // Dropdown Kelas Neo-Brutalism
+                            const SizedBox(height: 16),
+                            Text(
+                              "KELAS",
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.primaryDark,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Container(
+                              margin: const EdgeInsets.only(bottom: 16),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.white,
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: AppColors.primaryDark,
+                                  width: 2,
+                                ),
+                              ),
+                              child: DropdownButtonFormField<String>(
+                                value: _kelasController.text.isEmpty ? null : _kelasController.text,
+                                hint: Text(
+                                  "Pilih Kelasmu",
+                                  style: GoogleFonts.plusJakartaSans(
+                                    color: AppColors.textMuted,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                icon: const Icon(
+                                  Icons.arrow_drop_down_circle_outlined,
+                                  color: AppColors.brandPurple,
+                                ),
+                                decoration: const InputDecoration(
+                                  border: InputBorder.none,
+                                  prefixIcon: Icon(
+                                    Icons.school_rounded,
+                                    color: AppColors.brandPurple,
+                                  ),
+                                ),
+                                isExpanded: true,
+                                items: ["1", "2", "3"].map((String cls) {
+                                  return DropdownMenuItem<String>(
+                                    value: cls,
+                                    child: Text(
+                                      "Kelas $cls",
+                                      style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  );
+                                }).toList(),
+                                onChanged: (String? newValue) {
+                                  setState(() {
+                                    _kelasController.text = newValue ?? "";
+                                  });
+                                },
+                              ),
+                            ),
+
 
                             // Dropdown Sekolah Neo-Brutalism
                             Text(

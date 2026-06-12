@@ -21,48 +21,55 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version:
-          1, // Reset ke versi 1 karena fresh install — semua sudah di _createDB
+      version: 2,
       onCreate: _createDB,
+      onUpgrade: _upgradeDB,
     );
   }
+  
+  Future _upgradeDB(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      try {
+        await db.execute('ALTER TABLE pengguna ADD COLUMN kelas INTEGER;');
+      } catch (e) {
+        print("Column kelas mungkin sudah ada: $e");
+      }
+    }
+  }
 
-  /// ✅ MASTER CREATE: Semua tabel dari v1-v4 digabung di sini.
-  /// Tidak ada _onUpgrade karena ini fresh install dengan versi tunggal.
-  /// LARANGAN: Jangan pernah rename kolom/field yang sudah ada.
   Future _createDB(Database db, int version) async {
-    // ─── 1. TABEL USERS (mencakup kolom upgrade v2) ───────────────────
     await db.execute('''
-      CREATE TABLE users (
+      CREATE TABLE pengguna (
         id INTEGER PRIMARY KEY,
-        name TEXT,
-        username TEXT,
+        nama TEXT,
+        nama_pengguna TEXT,
         token TEXT,
-        school_origin TEXT,
-        language_code TEXT,
-        postal_code TEXT,
+        kelas INTEGER,
+        asal_sekolah TEXT,
+        kode_bahasa TEXT,
+        kode_pos TEXT,
         last_sync TEXT,
-        image_url TEXT,
+        url_gambar TEXT,
         local_image_path TEXT,
-        is_synced INTEGER DEFAULT 1
+        sinkron INTEGER DEFAULT 1
       )
     ''');
 
     // ─── 2. TABEL MATERIALS ───────────────────────────────────────────
     await db.execute('''
-      CREATE TABLE materials (
+      CREATE TABLE materi (
         id INTEGER PRIMARY KEY,
-        title_indo TEXT,
-        category TEXT,
-        image_url TEXT,
+        judul TEXT,
+        kategori TEXT,
+        url_gambar TEXT,
         local_image_path TEXT,
-        level_difficulty INTEGER,
-        language_code TEXT,
-        content_json TEXT,
-        updated_at TEXT,
+        tingkat_kesulitan INTEGER,
+        kode_bahasa TEXT,
+        konten TEXT,
+        diperbarui_pada TEXT,
         is_deleted INTEGER DEFAULT 0,
         ai_embeddings TEXT,
-        ai_status TEXT DEFAULT 'pending'
+        status_ai TEXT DEFAULT 'pending'
       )
     ''');
 
@@ -72,50 +79,50 @@ class DatabaseHelper {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         word_indo TEXT,
         word_tolaki TEXT,
-        language_code TEXT
+        kode_bahasa TEXT
       )
     ''');
 
     // ─── 4. TABEL QUESTIONS (mencakup kolom upgrade v3) ──────────────
     await db.execute('''
-      CREATE TABLE questions (
+      CREATE TABLE soal (
         id INTEGER PRIMARY KEY,
-        material_id INTEGER,
-        question_text_indo TEXT,
+        materi_id INTEGER,
+        teks_soal TEXT,
         question_text_tolaki TEXT,
-        options_json TEXT,
-        correct_answer_key TEXT,
-        difficulty_weight INTEGER,
-        template_type TEXT DEFAULT 'multiple_choice',
-        question_data TEXT,
-        assets_required TEXT,
-        updated_at TEXT,
+        opsi_json TEXT,
+        kunci_jawaban TEXT,
+        bobot_kesulitan INTEGER,
+        tipe_template TEXT DEFAULT 'multiple_choice',
+        data_soal TEXT,
+        aset_diperlukan TEXT,
+        diperbarui_pada TEXT,
         is_deleted INTEGER DEFAULT 0
       )
     ''');
 
     // ─── 5. TABEL STUDENT PROGRESS (mencakup kolom upgrade v3) ───────
     await db.execute('''
-      CREATE TABLE student_progress (
+      CREATE TABLE progres_siswa (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
-        question_id INTEGER,
-        student_answer TEXT,
-        is_correct INTEGER,
-        time_spent_seconds INTEGER,
-        answered_at TEXT,
-        template_type TEXT DEFAULT 'multiple_choice',
-        is_synced INTEGER DEFAULT 0
+        pengguna_id INTEGER,
+        soal_id INTEGER,
+        jawaban_siswa TEXT,
+        benar INTEGER,
+        waktu_detik INTEGER,
+        dijawab_pada TEXT,
+        tipe_template TEXT DEFAULT 'multiple_choice',
+        sinkron INTEGER DEFAULT 0
       )
     ''');
 
     // ─── 6. TABEL RECENT MATERIALS ────────────────────────────────────
     await db.execute('''
       CREATE TABLE recent_materials (
-        user_id INTEGER,
-        material_id INTEGER,
+        pengguna_id INTEGER,
+        materi_id INTEGER,
         last_accessed TEXT,
-        PRIMARY KEY (user_id, material_id)
+        PRIMARY KEY (pengguna_id, materi_id)
       )
     ''');
 
@@ -151,7 +158,7 @@ class DatabaseHelper {
       'CREATE INDEX IF NOT EXISTS idx_dict_indo ON dictionary(word_indo)',
     );
     await db.execute(
-      'CREATE INDEX IF NOT EXISTS idx_dict_lang ON dictionary(language_code)',
+      'CREATE INDEX IF NOT EXISTS idx_dict_lang ON dictionary(kode_bahasa)',
     );
   }
 
@@ -171,22 +178,22 @@ class DatabaseHelper {
     final db = await database;
 
     final userCount = Sqflite.firstIntValue(
-      await db.rawQuery('SELECT COUNT(*) FROM users'),
+      await db.rawQuery('SELECT COUNT(*) FROM pengguna'),
     );
     final materialCount = Sqflite.firstIntValue(
-      await db.rawQuery('SELECT COUNT(*) FROM materials'),
+      await db.rawQuery('SELECT COUNT(*) FROM materi'),
     );
     final questionCount = Sqflite.firstIntValue(
-      await db.rawQuery('SELECT COUNT(*) FROM questions'),
+      await db.rawQuery('SELECT COUNT(*) FROM soal'),
     );
     final assetCount = Sqflite.firstIntValue(
       await db.rawQuery('SELECT COUNT(*) FROM downloaded_assets'),
     );
 
     print("📊 DATABASE STATS:");
-    print("   Users: $userCount");
-    print("   Materials: $materialCount");
-    print("   Questions: $questionCount");
+    print("   Pengguna: $userCount");
+    print("   Materi: $materialCount");
+    print("   Soal: $questionCount");
     print("   Downloaded Assets: $assetCount");
 
     final dir = await getApplicationDocumentsDirectory();
@@ -201,17 +208,17 @@ class DatabaseHelper {
 
     final userCount =
         Sqflite.firstIntValue(
-          await db.rawQuery('SELECT COUNT(*) FROM users'),
+          await db.rawQuery('SELECT COUNT(*) FROM pengguna'),
         ) ??
         0;
     final materialCount =
         Sqflite.firstIntValue(
-          await db.rawQuery('SELECT COUNT(*) FROM materials'),
+          await db.rawQuery('SELECT COUNT(*) FROM materi'),
         ) ??
         0;
     final questionCount =
         Sqflite.firstIntValue(
-          await db.rawQuery('SELECT COUNT(*) FROM questions'),
+          await db.rawQuery('SELECT COUNT(*) FROM soal'),
         ) ??
         0;
     final assetCount =
@@ -232,9 +239,9 @@ class DatabaseHelper {
 
     return {
       'ready': isReady,
-      'users': userCount,
-      'materials': materialCount,
-      'questions': questionCount,
+      'pengguna': userCount,
+      'materi': materialCount,
+      'soal': questionCount,
       'assets': assetCount,
       'dictionaries': dictFiles.length,
     };

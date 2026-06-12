@@ -39,6 +39,8 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  sqflite_common_ffi: ^2.4.0+3
+  flutter_launcher_icons: ^0.14.4
 
 # dependency_overrides:
 #   speech_to_text: 6.5.1
@@ -77,3 +79,8 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/images/nusalearn-logo.png"

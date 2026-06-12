@@ -46,10 +46,10 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
-    // Validasi manual: Konfirmasi password harus sama
+    // Validasi manual: Konfirmasi kata_sandi harus sama
     if (_newPassController.text != _confirmPassController.text) {
       _showErrorSnackBar(
-        "Konfirmasi password tidak cocok dengan password baru.",
+        "Konfirmasi kata_sandi tidak cocok dengan kata_sandi baru.",
       );
       return;
     }
@@ -72,9 +72,9 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
         }
       }
     } on DioException catch (e) {
-      String err = "Gagal mengganti password";
+      String err = "Gagal mengganti kata_sandi";
       if (e.response != null) {
-        // Ambil pesan error spesifik dari backend (misal: password lama salah)
+        // Ambil pesan error spesifik dari backend (misal: kata_sandi lama salah)
         err = e.response?.data['message'] ?? err;
       }
       if (mounted) _showErrorSnackBar(err);

@@ -105,14 +105,14 @@ class _AuthCheckerState extends State<AuthChecker>
         // TAMPILAN SPLASH SCREEN SAAT PROSES INISIALISASI
         if (snapshot.connectionState == ConnectionState.waiting) {
           return Scaffold(
-            backgroundColor: const Color(0xFF121221), // Primary Dark
+            backgroundColor: const Color(0xFF121221),
             body: Center(
               child: ScaleTransition(
                 scale: _scaleAnimation,
                 child: const Icon(
                   Icons.school_rounded,
                   size: 80,
-                  color: Color(0xFFD4FF5B), // Accent Lime
+                  color: Color(0xFFD4FF5B),
                 ),
               ),
             ),

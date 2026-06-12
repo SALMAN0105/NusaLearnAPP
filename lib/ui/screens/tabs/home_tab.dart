@@ -12,6 +12,8 @@ import 'package:nusalearn/core/services/adaptive_service.dart';
 import 'package:nusalearn/logic/providers/auth_provider.dart';
 import 'package:nusalearn/ui/screens/materi_detail_screen.dart';
 import 'package:nusalearn/core/services/sync_service.dart';
+import 'package:lottie/lottie.dart';
+import 'package:audioplayers/audioplayers.dart';
 
 // Konstanta Warna Neo-Brutalism
 const Color kLime = Color(0xFFD2F945);
@@ -37,9 +39,11 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
   double _xpProgress = 0.0;
   List<Map<String, dynamic>> _recentMaterials = [];
   bool _isLoading = true;
+  bool _showLevelUpOverlay = false;
 
   late AnimationController _waveController;
   late AnimationController _spinController;
+  AudioPlayer? _sfxPlayer;
 
   @override
   void initState() {
@@ -60,7 +64,18 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
   void dispose() {
     _waveController.dispose();
     _spinController.dispose();
+    _sfxPlayer?.stop();
+    _sfxPlayer?.dispose();
     super.dispose();
+  }
+
+  Future<void> _playLevelUpSfx() async {
+    try {
+      _sfxPlayer ??= AudioPlayer();
+      await _sfxPlayer!.play(AssetSource('audio/level-up.mp3'));
+    } catch (e) {
+      debugPrint("Gagal memutar SFX level up: $e");
+    }
   }
 
   Future<void> _loadAllHomeData() async {
@@ -71,17 +86,17 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     String name = prefs.getString('user_name') ?? "Siswa";
     String school = prefs.getString('user_school') ?? "-";
 
-    int userId = 0;
+    int penggunaId = 0;
 
     // FETCH SINGLE ROW DARI SQLITE (O(1))
-    final userResult = await db.query('users', limit: 1);
+    final userResult = await db.query('pengguna', limit: 1);
 
     if (userResult.isNotEmpty) {
       final userData = userResult.first;
-      userId = userData['id'] as int;
+      penggunaId = userData['id'] as int;
 
-      // 1. DEFENSIVE OVERRIDE: Prioritaskan data SQLite (school_origin)
-      final dbSchool = userData['school_origin'] as String?;
+      // 1. DEFENSIVE OVERRIDE: Prioritaskan data SQLite (asal_sekolah)
+      final dbSchool = userData['asal_sekolah'] as String?;
       if (dbSchool != null && dbSchool.trim().isNotEmpty && dbSchool != "-") {
         school = dbSchool;
         // Sinkronisasi otomatis ke cache
@@ -89,33 +104,50 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
       }
 
       // 2. DEFENSIVE OVERRIDE: Sinkronkan juga nama jika perlu
-      final dbName = userData['name'] as String?;
+      final dbName = userData['nama'] as String?;
       if (dbName != null && dbName.trim().isNotEmpty) {
         name = dbName;
         await prefs.setString('user_name', name);
       }
     }
 
-    int level = await AdaptiveService().calculateStudentLevel(userId);
+    int level = await AdaptiveService().calculateStudentLevel(penggunaId);
     final countRead = await db.rawQuery(
-      'SELECT COUNT(*) as count FROM recent_materials WHERE user_id = ?',
-      [userId],
+      'SELECT COUNT(*) as count FROM recent_materials WHERE pengguna_id = ?',
+      [penggunaId],
     );
-    final countQuiz = await db.rawQuery(
-      'SELECT COUNT(*) as count FROM student_progress WHERE user_id = ? AND is_correct = 1',
-      [userId],
+    // Cek progress untuk level saat ini
+    final levelProgressQuery = await db.rawQuery(
+      '''
+      SELECT COUNT(DISTINCT sp.soal_id) as correctcount
+      FROM progres_siswa sp
+      JOIN soal q ON sp.soal_id = q.id
+      JOIN materi m ON q.materi_id = m.id
+      WHERE sp.pengguna_id = ? AND sp.benar = 1 AND m.tingkat_kesulitan = ?
+      ''',
+      [penggunaId, level],
+    );
+    
+    // Total keseluruhan jawaban benar (unik) untuk statistik
+    final totalQuizQuery = await db.rawQuery(
+      '''
+      SELECT COUNT(DISTINCT sp.soal_id) as count 
+      FROM progres_siswa sp 
+      WHERE sp.pengguna_id = ? AND sp.benar = 1
+      ''',
+      [penggunaId],
     );
 
     final recents = await db.rawQuery(
       '''
       SELECT m.*, r.last_accessed
       FROM recent_materials r
-      JOIN materials m ON r.material_id = m.id
-      WHERE r.user_id = ? AND m.is_deleted = 0
+      JOIN materi m ON r.materi_id = m.id
+      WHERE r.pengguna_id = ? AND m.is_deleted = 0
       ORDER BY r.last_accessed DESC
       LIMIT 10
     ''',
-      [userId],
+      [penggunaId],
     );
 
     if (mounted) {
@@ -124,12 +156,24 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
         _school = school;
 
         _totalRead = Sqflite.firstIntValue(countRead) ?? 0;
-        _quizCorrect = Sqflite.firstIntValue(countQuiz) ?? 0;
+        _quizCorrect = Sqflite.firstIntValue(totalQuizQuery) ?? 0;
 
-        // INJEKSI MATEMATIKA: 5 Jawaban Benar = 1 Level
-        _currentLevel = 1 + (_quizCorrect ~/ 5); // Pembagian integer (O(1))
-        _xpProgress =
-            (_quizCorrect % 5) / 5.0; // Kalkulasi persentase bar (0.0 - 0.8)
+        // Gunakan level dari AdaptiveService
+        _currentLevel = level;
+        
+        // Kalkulasi persentase bar (berdasarkan soal unik yang dijawab benar di level ini)
+        int correctForLevel = Sqflite.firstIntValue(levelProgressQuery) ?? 0;
+        _xpProgress = (correctForLevel / 5.0).clamp(0.0, 1.0);
+            
+        int lastSeenLevel = prefs.getInt('last_seen_level') ?? _currentLevel;
+        if (_currentLevel > lastSeenLevel) {
+          _showLevelUpOverlay = true;
+          _playLevelUpSfx();
+          Future.delayed(const Duration(milliseconds: 4000), () {
+            if (mounted) setState(() => _showLevelUpOverlay = false);
+          });
+        }
+        prefs.setInt('last_seen_level', _currentLevel);
 
         _recentMaterials = recents;
         Future.delayed(const Duration(milliseconds: 600), () {
@@ -192,7 +236,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
                             child: Row(
                               children: [
                                 Text(
-                                  "Halo, $_userName",
+                                  DictionaryService.instance.translateSync("Halo") + ", $_userName",
                                   style: GoogleFonts.plusJakartaSans(
                                     fontSize: 20,
                                     fontWeight: FontWeight.w800,
@@ -235,7 +279,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Text(
-                                  "Lanjutkan Belajar",
+                                  DictionaryService.instance.translateSync("Lanjutkan Belajar"),
                                   style: GoogleFonts.plusJakartaSans(
                                     fontSize: 16,
                                     fontWeight: FontWeight.w900,
@@ -271,14 +315,14 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
                                           color: kBlack,
                                         ),
                                         const SizedBox(width: 4),
-                                        Text(
-                                          "TERBARU",
-                                          style: GoogleFonts.plusJakartaSans(
-                                            fontSize: 9,
-                                            color: kBlack,
-                                            fontWeight: FontWeight.w800,
+                                          Text(
+                                            DictionaryService.instance.translateSync("TERBARU"),
+                                            style: GoogleFonts.plusJakartaSans(
+                                              fontSize: 9,
+                                              color: kBlack,
+                                              fontWeight: FontWeight.w800,
+                                            ),
                                           ),
-                                        ),
                                       ],
                                     ),
                                   ),
@@ -333,6 +377,59 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
           ),
 
           if (_isLoading) _buildGlassmorphismLoader(),
+
+          // LEVEL UP OVERLAY
+          if (_showLevelUpOverlay)
+            Positioned.fill(
+              child: GestureDetector(
+                onTap: () => setState(() => _showLevelUpOverlay = false),
+                child: Container(
+                  color: Colors.black.withOpacity(0.85),
+                  alignment: Alignment.center,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Lottie.asset(
+                        "assets/animasi/level-up.json",
+                        width: 300,
+                        height: 300,
+                        fit: BoxFit.contain,
+                        repeat: false,
+                      ),
+                      const SizedBox(height: 24),
+                      Text(
+                        "LEVEL UP!",
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 40,
+                          fontWeight: FontWeight.w900,
+                          color: kLime,
+                          letterSpacing: 2,
+                          shadows: const [Shadow(color: kBlack, offset: Offset(3, 3))],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        "Kamu sekarang berada di Level $_currentLevel",
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: kWhite,
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+                      Text(
+                        "Ketuk untuk melanjutkan",
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: kWhite.withOpacity(0.7),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -446,7 +543,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
                   const Icon(Icons.auto_awesome, color: kBlack, size: 14),
                   const SizedBox(width: 4),
                   Text(
-                    "AI AKTIF",
+                    DictionaryService.instance.translateSync("AI AKTIF"),
                     style: GoogleFonts.plusJakartaSans(
                       fontSize: 10,
                       fontWeight: FontWeight.w800,
@@ -563,7 +660,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    "LEVEL SAAT INI",
+                    DictionaryService.instance.translateSync("LEVEL SAAT INI"),
                     style: GoogleFonts.plusJakartaSans(
                       fontSize: 11,
                       fontWeight: FontWeight.w800,
@@ -751,9 +848,9 @@ class _NeoBrutalCard extends StatelessWidget {
     bool hasLocalImage = localPath != null && File(localPath).existsSync();
 
     String title = DictionaryService.instance.translateSync(
-      item['title_indo'] ?? 'Tanpa Judul',
+      item['judul'] ?? 'Tanpa Judul',
     );
-    String category = (item['category'] ?? 'UMUM').toString().toUpperCase();
+    String category = (item['kategori'] ?? 'UMUM').toString().toUpperCase();
 
     List<Color> boxColors = [
       const Color(0xFFFFDEB3),

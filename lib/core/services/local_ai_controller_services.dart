@@ -93,7 +93,7 @@ class LocalAIControllerService {
           ? ragResult.confidence *
                 0.7 // Turunkan confidence saat fallback
           : ragResult.confidence,
-      materialTitle: material.titleIndo,
+      materialTitle: material.judul,
     );
   }
 
@@ -412,8 +412,8 @@ $query<|im_end|>
         final charList = characters
             .map((c) {
               final cm = _safeMap(c);
-              final name = cm['name'] ?? '';
-              final role = cm['role'] ?? '';
+              final name = cm['nama'] ?? '';
+              final role = cm['peran'] ?? '';
               final desc = cm['description'] ?? '';
               return '• **$name** ($role): $desc';
             })
@@ -430,7 +430,7 @@ $query<|im_end|>
     if (isAskingAboutCharacter) {
       for (final c in characters) {
         final cm = _safeMap(c);
-        final name = (cm['name'] ?? '').toString().toLowerCase();
+        final name = (cm['nama'] ?? '').toString().toLowerCase();
         final nameLocal = (cm['name_local'] ?? '').toString().toLowerCase();
         if (name.isNotEmpty &&
             (queryLower.contains(name) ||
@@ -439,9 +439,9 @@ $query<|im_end|>
             cm['traits'],
           ).map((t) => t.toString()).join(', ');
           final desc = cm['description'] ?? '';
-          final role = cm['role'] ?? '';
+          final role = cm['peran'] ?? '';
           String answer =
-              '**${cm['name']}** adalah tokoh **$role** dalam materi ini.\n\n$desc';
+              '**${cm['nama']}** adalah tokoh **$role** dalam materi ini.\n\n$desc';
           if (traits.isNotEmpty) answer += '\n\n**Sifat/watak:** $traits';
           return _RagResult(
             answer: answer,
@@ -869,7 +869,7 @@ $query<|im_end|>
     String originalQuery,
     Map<String, dynamic> meta,
   ) async {
-    final langCode = meta['language_code'] as String? ?? 'id';
+    final langCode = meta['kode_bahasa'] as String? ?? 'id';
     if (langCode == 'id' || langCode == 'global') return answer;
 
     if (!DictionaryService.instance.isLoaded) return answer;
