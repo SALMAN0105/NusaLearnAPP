@@ -45,7 +45,7 @@ class DictionaryService {
       final baseUrl = ApiClient.baseUrl.contains('/api')
           ? ApiClient.baseUrl.substring(0, ApiClient.baseUrl.indexOf('/api'))
           : ApiClient.baseUrl.replaceAll(RegExp(r'/$'), '');
-      
+
       final fullUrl = '$baseUrl/storage/dictionaries/kamus_$kodeBahasa.json';
 
       debugPrint("📥 Memulai unduhan kamus dari: $fullUrl");
@@ -57,7 +57,9 @@ class DictionaryService {
       if (await file.exists()) {
         bool loaded = await loadDictionary(kodeBahasa);
         if (!loaded) {
-          debugPrint("❌ File berhasil diunduh namun gagal di-parse. Menghapus...");
+          debugPrint(
+            "❌ File berhasil diunduh namun gagal di-parse. Menghapus...",
+          );
           await file.delete();
           return false;
         }
@@ -134,7 +136,7 @@ class DictionaryService {
             'kode_bahasa': kodeBahasa,
           });
 
-          // Hanya muat mapping Indo -> Tolaki untuk mencegah re-translation beruntun 
+          // Hanya muat mapping Indo -> Tolaki untuk mencegah re-translation beruntun
           // yang membuat hasil akhir kembali ke bahasa Indonesia.
           _syncCache[indo] = local;
           count++;
@@ -145,9 +147,16 @@ class DictionaryService {
         } else if (jsonData is List) {
           for (var item in jsonData) {
             if (item is Map) {
-              final k = item['word_tolaki'] ?? item['local'] ?? item.keys.first;
-              final v = item['word_indo'] ?? item['indo'] ?? item.values.last;
-              addEntry(k, v);
+              final indo =
+                  item['word_indo'] ?? item['indo'] ?? item['indonesia'];
+              final local =
+                  item['word_tolaki'] ?? item['local'] ?? item['daerah'];
+
+              if (indo != null && local != null) {
+                addEntry(indo, local);
+              } else if (item.length >= 2) {
+                addEntry(item.keys.first, item.values.last);
+              }
             }
           }
         }
@@ -160,9 +169,12 @@ class DictionaryService {
       _activeLang = kodeBahasa;
       isLoaded = true;
       // Sort keys descending by length so phrases matched before single words
-      _sortedKeys = _syncCache.keys.toList()..sort((a, b) => b.length.compareTo(a.length));
-      
-      debugPrint("✅ Kamus $kodeBahasa dimuat: ${_syncCache.length} entri di cache (Bi-directional).");
+      _sortedKeys = _syncCache.keys.toList()
+        ..sort((a, b) => b.length.compareTo(a.length));
+
+      debugPrint(
+        "✅ Kamus $kodeBahasa dimuat: ${_syncCache.length} entri di cache (Bi-directional).",
+      );
       return true;
     } catch (e) {
       debugPrint("❌ Gagal memuat kamus: $e");
@@ -198,13 +210,16 @@ class DictionaryService {
 
     final translationMap = <String, String>{};
     for (var row in maps) {
-      translationMap[row['word_tolaki'].toString().toLowerCase()] = row['word_indo'].toString();
+      translationMap[row['word_tolaki'].toString().toLowerCase()] =
+          row['word_indo'].toString();
     }
 
-    return words.map((word) {
-      final clean = word.replaceAll(RegExp(r'[^\w\s]'), '').toLowerCase();
-      return translationMap[clean] ?? word;
-    }).join(' ');
+    return words
+        .map((word) {
+          final clean = word.replaceAll(RegExp(r'[^\w\s]'), '').toLowerCase();
+          return translationMap[clean] ?? word;
+        })
+        .join(' ');
   }
 
   Future<String> translateToLocal(String text) async {
@@ -231,13 +246,16 @@ class DictionaryService {
 
     final translationMap = <String, String>{};
     for (var row in maps) {
-      translationMap[row['word_indo'].toString().toLowerCase()] = row['word_tolaki'].toString();
+      translationMap[row['word_indo'].toString().toLowerCase()] =
+          row['word_tolaki'].toString();
     }
 
-    return words.map((word) {
-      final clean = word.replaceAll(RegExp(r'[^\w\s]'), '').toLowerCase();
-      return translationMap[clean] ?? word;
-    }).join(' ');
+    return words
+        .map((word) {
+          final clean = word.replaceAll(RegExp(r'[^\w\s]'), '').toLowerCase();
+          return translationMap[clean] ?? word;
+        })
+        .join(' ');
   }
 
   // ✅ SYNC translate — untuk UI layer & Material (PHRASE-AWARE TRANSLATION)
@@ -246,26 +264,28 @@ class DictionaryService {
 
     try {
       String result = text;
-      
+
       for (String key in _sortedKeys) {
         // Fast-path: hanya proses RegExp jika text mengandung key (case-insensitive)
         if (result.toLowerCase().contains(key)) {
           final translated = _syncCache[key]!;
           // Ganti kata/frasa lengkap yang diapit boundary \b (case-insensitive)
           result = result.replaceAllMapped(
-              RegExp(r'\b' + RegExp.escape(key) + r'\b', caseSensitive: false), 
-              (match) {
-            String original = match.group(0)!;
-            // Preservasi Capitalization
-            if (original.isNotEmpty && original[0] == original[0].toUpperCase()) {
-              if (translated.length > 1) {
-                return translated[0].toUpperCase() + translated.substring(1);
-              } else {
-                return translated.toUpperCase();
+            RegExp(r'\b' + RegExp.escape(key) + r'\b', caseSensitive: false),
+            (match) {
+              String original = match.group(0)!;
+              // Preservasi Capitalization
+              if (original.isNotEmpty &&
+                  original[0] == original[0].toUpperCase()) {
+                if (translated.length > 1) {
+                  return translated[0].toUpperCase() + translated.substring(1);
+                } else {
+                  return translated.toUpperCase();
+                }
               }
-            }
-            return translated;
-          });
+              return translated;
+            },
+          );
         }
       }
 
